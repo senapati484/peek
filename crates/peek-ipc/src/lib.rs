@@ -117,6 +117,10 @@ pub enum Command {
         key: String,
         value: serde_json::Value,
     },
+    /// Clear cookies and stored web data for current profile.
+    ClearCookies,
+    /// Request cookie count.
+    GetCookies,
     Quit,
 }
 
@@ -174,6 +178,9 @@ pub enum Event {
     },
     Toast {
         message: String,
+    },
+    CookiesCount {
+        count: usize,
     },
 }
 
@@ -249,6 +256,8 @@ pub enum PageEvent {
     PreviewClick { url: String },
     /// An in-page resource was blocked by the ad blocker.
     BlockedResource { url: String },
+    /// A cookie was set from client script or navigation.
+    CookieSet { cookie: String, url: String },
     /// Extension content-script bridge message (Phase 5).
 
     ExtensionMessage {
@@ -370,6 +379,24 @@ mod tests {
                 expected: PROTOCOL_VERSION
             })
         );
+    }
+
+    #[test]
+    fn cookie_ipc_round_trip() {
+        let cmd = Command::ClearCookies;
+        let json = Envelope::new("n", cmd.clone()).to_json().unwrap();
+        assert_eq!(Envelope::<Command>::decode(&json, "n").unwrap(), cmd);
+
+        let pe = PageEvent::CookieSet {
+            cookie: "foo=bar; Path=/".into(),
+            url: "https://example.com/".into(),
+        };
+        let json_pe = Envelope::new("n", pe.clone()).to_json().unwrap();
+        assert_eq!(Envelope::<PageEvent>::decode(&json_pe, "n").unwrap(), pe);
+
+        let ev = Event::CookiesCount { count: 42 };
+        let json_ev = Envelope::new("n", ev.clone()).to_json().unwrap();
+        assert_eq!(Envelope::<Event>::decode(&json_ev, "n").unwrap(), ev);
     }
 
     #[test]

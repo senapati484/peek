@@ -9,7 +9,7 @@ use peek_ipc::TabId;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -58,6 +58,19 @@ pub struct Session {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StoredCookie {
+    pub domain: String,
+    pub name: String,
+    pub path: String,
+    pub value: String,
+    pub expires_at: Option<i64>,
+    pub secure: bool,
+    pub http_only: bool,
+    pub same_site: Option<String>,
+    pub created_at: i64,
+}
+
 pub struct Store {
     conn: Connection,
 }
@@ -97,9 +110,12 @@ impl Store {
         }
         if version < 1 {
             self.conn.execute_batch(MIGRATION_V1)?;
-            self.conn
-                .pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
+        if version < 2 {
+            self.conn.execute_batch(MIGRATION_V2)?;
+        }
+        self.conn
+            .pragma_update(None, "user_version", SCHEMA_VERSION)?;
         Ok(())
     }
 
@@ -364,6 +380,117 @@ impl Store {
             )
             .optional()?)
     }
+
+    // -- cookies ---------------------------------------------------------
+
+    pub fn save_cookie(&self, cookie: &StoredCookie) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO cookies (domain, name, path, value, expires_at, secure, http_only, same_site, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(domain, name, path) DO UPDATE SET
+               value = excluded.value,
+               expires_at = excluded.expires_at,
+               secure = excluded.secure,
+               http_only = excluded.http_only,
+               same_site = excluded.same_site,
+               created_at = excluded.created_at",
+            params![
+                cookie.domain,
+                cookie.name,
+                cookie.path,
+                cookie.value,
+                cookie.expires_at,
+                cookie.secure as i64,
+                cookie.http_only as i64,
+                cookie.same_site,
+                cookie.created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_cookies(&self, cookies: &[StoredCookie]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for cookie in cookies {
+            tx.execute(
+                "INSERT INTO cookies (domain, name, path, value, expires_at, secure, http_only, same_site, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(domain, name, path) DO UPDATE SET
+                   value = excluded.value,
+                   expires_at = excluded.expires_at,
+                   secure = excluded.secure,
+                   http_only = excluded.http_only,
+                   same_site = excluded.same_site,
+                   created_at = excluded.created_at",
+                params![
+                    cookie.domain,
+                    cookie.name,
+                    cookie.path,
+                    cookie.value,
+                    cookie.expires_at,
+                    cookie.secure as i64,
+                    cookie.http_only as i64,
+                    cookie.same_site,
+                    cookie.created_at,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_cookies_for_domain(&self, domain: &str) -> Result<Vec<StoredCookie>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT domain, name, path, value, expires_at, secure, http_only, same_site, created_at
+             FROM cookies WHERE domain = ?1 OR ?1 LIKE '%.' || domain
+             ORDER BY path ASC, name ASC",
+        )?;
+        let rows = stmt.query_map(params![domain], map_cookie)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn get_all_cookies(&self) -> Result<Vec<StoredCookie>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT domain, name, path, value, expires_at, secure, http_only, same_site, created_at
+             FROM cookies ORDER BY domain ASC, name ASC",
+        )?;
+        let rows = stmt.query_map([], map_cookie)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn delete_cookie(&self, domain: &str, name: &str, path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM cookies WHERE domain = ?1 AND name = ?2 AND path = ?3",
+            params![domain, name, path],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_cookies(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM cookies", [])?;
+        Ok(())
+    }
+
+    pub fn cookie_count(&self) -> Result<usize> {
+        let count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM cookies", [], |row| row.get(0))?;
+        Ok(count as usize)
+    }
+}
+
+fn map_cookie(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredCookie> {
+    Ok(StoredCookie {
+        domain: row.get(0)?,
+        name: row.get(1)?,
+        path: row.get(2)?,
+        value: row.get(3)?,
+        expires_at: row.get(4)?,
+        secure: row.get::<_, i64>(5)? != 0,
+        http_only: row.get::<_, i64>(6)? != 0,
+        same_site: row.get(7)?,
+        created_at: row.get(8)?,
+    })
 }
 
 fn map_history(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
@@ -464,12 +591,88 @@ CREATE TABLE site_rules (
 );
 "#;
 
+const MIGRATION_V2: &str = r#"
+CREATE TABLE IF NOT EXISTS cookies (
+  domain      TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  path        TEXT NOT NULL DEFAULT '/',
+  value       TEXT NOT NULL,
+  expires_at  INTEGER,
+  secure      INTEGER NOT NULL DEFAULT 0,
+  http_only   INTEGER NOT NULL DEFAULT 0,
+  same_site   TEXT,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (domain, name, path)
+);
+CREATE INDEX IF NOT EXISTS cookies_domain_idx ON cookies (domain);
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn store() -> Store {
         Store::open_in_memory().unwrap()
+    }
+
+    #[test]
+    fn cookies_crud_and_counts() {
+        let store = store();
+        assert_eq!(store.cookie_count().unwrap(), 0);
+
+        let c1 = StoredCookie {
+            domain: "google.com".into(),
+            name: "SID".into(),
+            path: "/".into(),
+            value: "secret123".into(),
+            expires_at: Some(1800000000),
+            secure: true,
+            http_only: true,
+            same_site: Some("Lax".into()),
+            created_at: 1000,
+        };
+        store.save_cookie(&c1).unwrap();
+        assert_eq!(store.cookie_count().unwrap(), 1);
+
+        let loaded = store.get_cookies_for_domain("google.com").unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0], c1);
+
+        // Subdomain matching
+        let sub = store.get_cookies_for_domain("mail.google.com").unwrap();
+        assert_eq!(sub.len(), 1);
+        assert_eq!(sub[0], c1);
+
+        // Update value (UPSERT)
+        let mut c1_updated = c1.clone();
+        c1_updated.value = "newvalue456".into();
+        store.save_cookie(&c1_updated).unwrap();
+        assert_eq!(store.cookie_count().unwrap(), 1);
+        let loaded2 = store.get_cookies_for_domain("google.com").unwrap();
+        assert_eq!(loaded2[0].value, "newvalue456");
+
+        // Batch save
+        let c2 = StoredCookie {
+            domain: "teledrive.app".into(),
+            name: "token".into(),
+            path: "/".into(),
+            value: "tele999".into(),
+            expires_at: None,
+            secure: true,
+            http_only: false,
+            same_site: Some("Strict".into()),
+            created_at: 1050,
+        };
+        store.save_cookies(&[c2.clone()]).unwrap();
+        assert_eq!(store.cookie_count().unwrap(), 2);
+
+        // Delete single
+        store.delete_cookie("google.com", "SID", "/").unwrap();
+        assert_eq!(store.cookie_count().unwrap(), 1);
+
+        // Clear all
+        store.clear_cookies().unwrap();
+        assert_eq!(store.cookie_count().unwrap(), 0);
     }
 
     #[test]

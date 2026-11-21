@@ -5,11 +5,15 @@
 //! window; this crate is the only place that knows about `wry` types.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
+pub use wry::cookie;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use wry::WebViewBuilderExtDarwin;
 use tao::window::Window;
 use wry::dpi::{LogicalPosition, LogicalSize};
-use wry::{NewWindowResponse, PageLoadEvent, Rect, WebView, WebViewBuilder};
+use wry::{NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBuilder};
 
 pub type WebViewId = u64;
 
@@ -117,6 +121,8 @@ pub struct WebViewOptions {
     /// When set, registers the `peek` scheme backed by this provider.
     pub assets: Option<Arc<dyn AssetProvider>>,
     pub zoom: Option<f64>,
+    pub data_directory: Option<PathBuf>,
+    pub data_store_identifier: Option<[u8; 16]>,
 }
 
 impl Default for WebViewOptions {
@@ -134,6 +140,8 @@ impl Default for WebViewOptions {
             html: None,
             assets: None,
             zoom: None,
+            data_directory: None,
+            data_store_identifier: None,
         }
     }
 }
@@ -157,11 +165,14 @@ pub trait Engine {
     fn evaluate(&self, id: WebViewId, js: &str) -> Result<()>;
     fn focus(&self, id: WebViewId) -> Result<()>;
     fn set_zoom(&self, id: WebViewId, zoom: f64) -> Result<()>;
+    fn cookies(&self, id: WebViewId) -> Result<Vec<cookie::Cookie<'static>>>;
+    fn set_cookie(&self, id: WebViewId, cookie: &cookie::Cookie<'_>) -> Result<()>;
 }
 
 pub struct WryEngine {
     next_id: WebViewId,
     views: HashMap<WebViewId, WebView>,
+    web_contexts: HashMap<PathBuf, WebContext>,
     events: Arc<dyn EngineEvents>,
 }
 
@@ -170,6 +181,7 @@ impl WryEngine {
         Self {
             next_id: 1,
             views: HashMap::new(),
+            web_contexts: HashMap::new(),
             events,
         }
     }
@@ -184,7 +196,17 @@ impl Engine for WryEngine {
         let id = self.next_id;
         self.next_id += 1;
 
-        let mut builder = WebViewBuilder::new()
+        let builder = if let Some(ref data_dir) = options.data_directory {
+            let context = self
+                .web_contexts
+                .entry(data_dir.clone())
+                .or_insert_with(|| WebContext::new(Some(data_dir.clone())));
+            WebViewBuilder::new_with_web_context(context)
+        } else {
+            WebViewBuilder::new()
+        };
+
+        let mut builder = builder
             .with_bounds(options.bounds.to_wry())
             .with_visible(options.visible)
             .with_transparent(options.transparent)
@@ -193,6 +215,13 @@ impl Engine for WryEngine {
             .with_devtools(options.devtools)
             .with_accept_first_mouse(options.accept_first_mouse)
             .with_back_forward_navigation_gestures(true);
+
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let Some(store_id) = options.data_store_identifier {
+            if !options.incognito {
+                builder = builder.with_data_store_identifier(store_id);
+            }
+        }
 
         for script in options.initialization_scripts {
             builder = builder.with_initialization_script(script);
@@ -328,6 +357,15 @@ impl Engine for WryEngine {
 
     fn set_zoom(&self, id: WebViewId, zoom: f64) -> Result<()> {
         self.view(id)?.zoom(zoom)?;
+        Ok(())
+    }
+
+    fn cookies(&self, id: WebViewId) -> Result<Vec<cookie::Cookie<'static>>> {
+        Ok(self.view(id)?.cookies().unwrap_or_default())
+    }
+
+    fn set_cookie(&self, id: WebViewId, cookie: &cookie::Cookie<'_>) -> Result<()> {
+        let _ = self.view(id)?.set_cookie(cookie);
         Ok(())
     }
 }

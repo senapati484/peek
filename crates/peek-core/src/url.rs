@@ -211,7 +211,7 @@ mod tests {
         );
         assert_eq!(
             engine.search_url("a b&c"),
-            "https://duckduckgo.com/?q=a+b%26c"
+            "https://www.google.com/search?q=a+b%26c"
         );
     }
 

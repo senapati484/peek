@@ -37,6 +37,7 @@ export type PeekEvent =
   | { type: 'drawerState'; open: boolean }
   | { type: 'adblockCount'; blocked: number; allowedOnSite: boolean; host: string | null }
   | { type: 'profileChanged'; name: string }
+  | { type: 'cookiesCount'; count: number }
   | {
       type: 'settings';
       maxLive: number;
@@ -68,6 +69,8 @@ export type PeekCommand =
   | { type: 'openUrl'; url: string }
   | { type: 'setSiteAdblock'; host: string; enabled: boolean }
   | { type: 'setSetting'; key: string; value: unknown }
+  | { type: 'clearCookies' }
+  | { type: 'getCookies' }
   | { type: 'quit' };
 
 type Bridge = {

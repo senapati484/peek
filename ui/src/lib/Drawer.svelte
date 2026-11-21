@@ -10,6 +10,7 @@
   let blocked = $state(0);
   let allowedOnSite = $state(false);
   let host = $state<string | null>(null);
+  let cookiesCount = $state(0);
 
   let maxLive = $state(5);
   let idleMinutes = $state(10);
@@ -70,6 +71,9 @@
         break;
       case 'drawerState':
         if (!event.open) send({ type: 'setDrawer', open: false });
+        break;
+      case 'cookiesCount':
+        cookiesCount = event.count;
         break;
       default:
         break;
@@ -239,8 +243,15 @@
       </div>
     {:else if section === 'profiles'}
       <div class="card">
-        <div class="card-title">Default</div>
-        <p class="note">Separate profiles, cookies and histories arrive in Phase 4. The data layout already reserves one directory per profile.</p>
+        <div class="card-title">Default Profile</div>
+        <p class="note">Cookies and website data are stored in an isolated persistent profile store.</p>
+        <div class="field readonly">
+          <span class="key">Stored Cookies</span>
+          <span>{cookiesCount}</span>
+        </div>
+        <button class="clear-btn" onclick={() => send({ type: 'clearCookies' })}>
+          Clear Cookies & Storage
+        </button>
       </div>
     {:else if section === 'extensions'}
       <div class="card">
@@ -502,6 +513,24 @@
 
   .toggle input {
     accent-color: var(--accent);
+  }
+
+  .clear-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--hover);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .clear-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
   }
 
   footer {

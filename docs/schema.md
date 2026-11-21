@@ -1,4 +1,4 @@
-# Peek — Database Schema (v1)
+# Peek — Database Schema (v2)
 
 Peek uses SQLite in WAL mode (`journal_mode = WAL`, `foreign_keys = ON`) with one database per profile located at:
 - macOS: `~/Library/Application Support/dev.Peek.Peek/profiles/<profile>/peek.db`
@@ -105,9 +105,27 @@ CREATE TABLE site_rules (
 );
 ```
 
+### 1.8 `cookies` (v2)
+Stores persistent HTTP and client-side cookies per profile.
+```sql
+CREATE TABLE cookies (
+    domain      TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    path        TEXT NOT NULL DEFAULT '/',
+    value       TEXT NOT NULL,
+    expires_at  INTEGER,
+    secure      INTEGER NOT NULL DEFAULT 0,
+    http_only   INTEGER NOT NULL DEFAULT 0,
+    same_site   TEXT,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (domain, name, path)
+);
+CREATE INDEX cookies_domain_idx ON cookies(domain);
+```
+
 ---
 
 ## 2. Integrity & Concurrency
-- `user_version` PRAGMA tracks migrations (`SCHEMA_VERSION = 1`).
+- `user_version` PRAGMA tracks migrations (`SCHEMA_VERSION = 2`).
 - FTS queries are sanitized using quoted token prefix matching (e.g. `"foo"* "bar"*`) to prevent syntax injection errors from user input.
 - Database writes run inside atomic transactions.

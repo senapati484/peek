@@ -161,6 +161,10 @@ pub struct App {
     adblock: Arc<AdblockEngine>,
     adblock_config: AdblockConfig,
     tab_counters: HashMap<TabId, BlockCounters>,
+    #[allow(dead_code)]
+    profile_dir: std::path::PathBuf,
+    profile_web_data_dir: std::path::PathBuf,
+    profile_uuid: [u8; 16],
 }
 
 impl App {
@@ -168,6 +172,7 @@ impl App {
         window: Window,
         proxy: EventLoopProxy<UserEvent>,
         store: Store,
+        profile_dir: std::path::PathBuf,
     ) -> anyhow::Result<Self> {
         let settings = Settings::load(&store);
         let engine = WryEngine::new(Arc::new(ProxyEvents {
@@ -184,6 +189,35 @@ impl App {
         let default_rules = "||doubleclick.net^\n||googlesyndication.com^\n||adservice.google.com^\n||adnxs.com^\n||taboola.com^\n||outbrain.com^\n||scorecardresearch.com^\n||facebook.com/tr/^\n||amazon-adsystem.com^\n##.ad-banner\n##.adsbygoogle\n##[id^=\"google_ads_\"]\n##div.ad-container";
         let adblock = Arc::new(AdblockEngine::new(default_rules));
         let tab_counters = HashMap::new();
+
+        let profile_uuid = match store.get_setting("profileUuid") {
+            Ok(Some(hex_str)) if hex_str.len() == 32 => {
+                let mut bytes = [0u8; 16];
+                let mut valid = true;
+                for i in 0..16 {
+                    if let Ok(b) = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16) {
+                        bytes[i] = b;
+                    } else {
+                        valid = false;
+                        break;
+                    }
+                }
+                if valid {
+                    bytes
+                } else {
+                    derive_profile_uuid("default")
+                }
+            }
+            _ => {
+                let uuid = derive_profile_uuid("default");
+                let hex_str = uuid.iter().map(|b| format!("{b:02x}")).collect::<String>();
+                let _ = store.set_setting("profileUuid", &hex_str);
+                uuid
+            }
+        };
+        let profile_web_data_dir = profile_dir.join("web_data");
+        let _ = std::fs::create_dir_all(&profile_web_data_dir);
+
         Ok(Self {
             window,
             engine,
@@ -208,8 +242,10 @@ impl App {
             adblock,
             adblock_config,
             tab_counters,
+            profile_dir,
+            profile_web_data_dir,
+            profile_uuid,
         })
-
     }
 
     pub fn start(&mut self) -> anyhow::Result<()> {
@@ -302,6 +338,7 @@ impl App {
                 self.tabs.set_loading(tab, true);
                 self.send_loading(tab);
                 self.push_tabs();
+                self.send_cookies_count();
             }
             LoadEvent::Finished => {
                 self.tabs.set_loading(tab, false);
@@ -317,6 +354,7 @@ impl App {
 
                 self.send_loading(tab);
                 self.push_tabs();
+                self.send_cookies_count();
             }
         }
     }
@@ -426,6 +464,16 @@ impl App {
                 self.send_adblock_state();
             }
             Command::SetSetting { key, value } => self.apply_setting(&key, value),
+            Command::ClearCookies => {
+                let _ = self.store.clear_cookies();
+                self.send(Event::CookiesCount { count: 0 });
+                self.send(Event::Toast {
+                    message: "Cookies and storage cleared".into(),
+                });
+            }
+            Command::GetCookies => {
+                self.send_cookies_count();
+            }
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -508,6 +556,12 @@ impl App {
                 if let Some(tab) = tab {
                     self.tab_counters.entry(tab).or_default().record(1);
                     self.send_adblock_state();
+                }
+            }
+            PageEvent::CookieSet { cookie, url } => {
+                if let Some(stored) = parse_cookie_string(&cookie, &url) {
+                    let _ = self.store.save_cookie(&stored);
+                    self.send_cookies_count();
                 }
             }
             PageEvent::ExtensionMessage { .. } => {}
@@ -741,6 +795,9 @@ impl App {
                 assets: Some(Arc::new(PageAssets)),
                 initialization_scripts: vec![script],
                 accept_first_mouse: true,
+                data_directory: Some(self.profile_web_data_dir.clone()),
+                data_store_identifier: Some(self.profile_uuid),
+                incognito: false,
                 ..Default::default()
             },
         )?;
@@ -1013,6 +1070,12 @@ impl App {
         });
         self.send_adblock_state();
         self.send_settings();
+        self.send_cookies_count();
+    }
+
+    fn send_cookies_count(&self) {
+        let count = self.store.cookie_count().unwrap_or(0);
+        self.send(Event::CookiesCount { count });
     }
 
     fn send_settings(&self) {
@@ -1186,5 +1249,91 @@ fn random_nonce() -> String {
         out.push_str(&format!("{:016x}", hasher.finish()));
     }
     out
+}
+
+pub fn derive_profile_uuid(profile_name: &str) -> [u8; 16] {
+    let mut hash = [0u8; 16];
+    let seed = format!("dev.peek.profile.{}", profile_name);
+    for (i, b) in seed.as_bytes().iter().enumerate() {
+        hash[i % 16] ^= b.wrapping_mul((i as u8).wrapping_add(1));
+    }
+    // Set UUID version 4 and variant bits
+    hash[6] = (hash[6] & 0x0f) | 0x40;
+    hash[8] = (hash[8] & 0x3f) | 0x80;
+    hash
+}
+
+fn parse_cookie_string(raw: &str, page_url: &str) -> Option<peek_store::StoredCookie> {
+    let mut parts = raw.split(';');
+    let first = parts.next()?.trim();
+    if first.is_empty() {
+        return None;
+    }
+    let (name, value) = match first.find('=') {
+        Some(pos) => (&first[..pos], &first[pos + 1..]),
+        None => (first, ""),
+    };
+    if name.is_empty() {
+        return None;
+    }
+
+    let default_domain = Url::parse(page_url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_string()))
+        .unwrap_or_else(|| "localhost".to_string());
+
+    let mut domain = default_domain;
+    let mut path = "/".to_string();
+    let mut secure = false;
+    let http_only = false;
+    let mut same_site = None;
+    let mut expires_at = None;
+
+    for part in parts {
+        let trimmed = part.trim();
+        let (k, v) = match trimmed.find('=') {
+            Some(pos) => (trimmed[..pos].trim(), trimmed[pos + 1..].trim()),
+            None => (trimmed, ""),
+        };
+        let k_lower = k.to_ascii_lowercase();
+        match k_lower.as_str() {
+            "domain" => {
+                if !v.is_empty() {
+                    domain = v.trim_start_matches('.').to_string();
+                }
+            }
+            "path" => {
+                if !v.is_empty() {
+                    path = v.to_string();
+                }
+            }
+            "secure" => {
+                secure = true;
+            }
+            "samesite" => {
+                if !v.is_empty() {
+                    same_site = Some(v.to_string());
+                }
+            }
+            "max-age" => {
+                if let Ok(secs) = v.parse::<i64>() {
+                    expires_at = Some(now_ms() + secs * 1000);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Some(peek_store::StoredCookie {
+        domain,
+        name: name.to_string(),
+        path,
+        value: value.to_string(),
+        expires_at,
+        secure,
+        http_only,
+        same_site,
+        created_at: now_ms(),
+    })
 }
 

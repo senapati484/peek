@@ -143,6 +143,28 @@ const PAGE_SCRIPT: &str = r##"
     }
   } catch (e) {}
 
+  try {
+    var cookieDesc = Object.getOwnPropertyDescriptor(Document.prototype, "cookie") ||
+                     Object.getOwnPropertyDescriptor(HTMLDocument.prototype, "cookie");
+    if (cookieDesc && cookieDesc.set && cookieDesc.get) {
+      var origSet = cookieDesc.set;
+      var origGet = cookieDesc.get;
+      Object.defineProperty(document, "cookie", {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          return origGet.call(document);
+        },
+        set: function (val) {
+          origSet.call(document, val);
+          try {
+            send({ type: "cookieSet", cookie: String(val), url: String(location.href) });
+          } catch (e) {}
+        }
+      });
+    }
+  } catch (e) {}
+
 
   document.addEventListener("keydown", function (ev) {
     var mod = ev.metaKey || ev.ctrlKey;

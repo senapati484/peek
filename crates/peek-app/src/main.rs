@@ -13,7 +13,9 @@ use tao::window::WindowBuilder;
 use app::{App, UserEvent};
 
 fn main() -> anyhow::Result<()> {
-    let db_path = profile_db_path();
+    let p_dir = profile_dir();
+    std::fs::create_dir_all(&p_dir)?;
+    let db_path = p_dir.join("peek.db");
     let store = Store::open(&db_path)
         .with_context(|| format!("opening profile database at {}", db_path.display()))?;
 
@@ -28,7 +30,7 @@ fn main() -> anyhow::Result<()> {
         .build(&event_loop)
         .context("creating the Peek window")?;
 
-    let mut app = App::new(window, proxy, store)?;
+    let mut app = App::new(window, proxy, store, p_dir)?;
     app.start()?;
 
     event_loop.run(move |event, _, control_flow| {
@@ -36,16 +38,15 @@ fn main() -> anyhow::Result<()> {
     });
 }
 
-fn profile_db_path() -> PathBuf {
+fn profile_dir() -> PathBuf {
     if let Ok(explicit) = std::env::var("PEEK_DATA_DIR") {
-        return PathBuf::from(explicit).join("peek.db");
+        return PathBuf::from(explicit);
     }
     if let Some(dirs) = directories::ProjectDirs::from("dev", "Peek", "Peek") {
         return dirs
             .data_dir()
             .join("profiles")
-            .join("default")
-            .join("peek.db");
+            .join("default");
     }
-    PathBuf::from(".peek").join("peek.db")
+    PathBuf::from(".peek").join("default")
 }
