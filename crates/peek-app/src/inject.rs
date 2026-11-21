@@ -97,6 +97,35 @@ const PAGE_SCRIPT: &str = r##"
   }
 
   try {
+    if (window.PublicKeyCredential) {
+      if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function") {
+        PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = function () {
+          return Promise.resolve(false);
+        };
+      }
+      if (typeof PublicKeyCredential.isConditionalMediationAvailable === "function") {
+        PublicKeyCredential.isConditionalMediationAvailable = function () {
+          return Promise.resolve(false);
+        };
+      }
+    }
+    if (window.navigator && window.navigator.credentials && typeof window.navigator.credentials.get === "function") {
+      var origCredGet = window.navigator.credentials.get.bind(window.navigator.credentials);
+      window.navigator.credentials.get = function (options) {
+        if (options && options.publicKey) {
+          var timeoutPromise = new Promise(function (_, reject) {
+            setTimeout(function () {
+              reject(new DOMException("Passkey platform authenticator not available or permitted in this browser.", "NotAllowedError"));
+            }, 2500);
+          });
+          return Promise.race([origCredGet(options), timeoutPromise]);
+        }
+        return origCredGet(options);
+      };
+    }
+  } catch (e) {}
+
+  try {
     var AD_PATTERNS = [
       /doubleclick\.net/,
       /googlesyndication\.com/,

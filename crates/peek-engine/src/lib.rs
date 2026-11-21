@@ -121,6 +121,7 @@ pub struct WebViewOptions {
     /// When set, registers the `peek` scheme backed by this provider.
     pub assets: Option<Arc<dyn AssetProvider>>,
     pub zoom: Option<f64>,
+    pub user_agent: Option<String>,
     pub data_directory: Option<PathBuf>,
     pub data_store_identifier: Option<[u8; 16]>,
 }
@@ -140,6 +141,7 @@ impl Default for WebViewOptions {
             html: None,
             assets: None,
             zoom: None,
+            user_agent: None,
             data_directory: None,
             data_store_identifier: None,
         }
@@ -221,6 +223,10 @@ impl Engine for WryEngine {
             if !options.incognito {
                 builder = builder.with_data_store_identifier(store_id);
             }
+        }
+
+        if let Some(ref ua) = options.user_agent {
+            builder = builder.with_user_agent(ua);
         }
 
         for script in options.initialization_scripts {

@@ -27,6 +27,8 @@ use crate::inject;
 
 pub const BAR_HEIGHT: f64 = 36.0;
 pub const DRAWER_WIDTH: f64 = 320.0;
+pub const DEFAULT_USER_AGENT: &str =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
 const PREVIEW_HIDE_GRACE: Duration = Duration::from_millis(300);
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
 const IDLE_TICK_EVERY: u64 = 240;
@@ -798,6 +800,7 @@ impl App {
                 data_directory: Some(self.profile_web_data_dir.clone()),
                 data_store_identifier: Some(self.profile_uuid),
                 incognito: false,
+                user_agent: Some(DEFAULT_USER_AGENT.to_string()),
                 ..Default::default()
             },
         )?;
@@ -913,6 +916,7 @@ impl App {
                 devtools: false,
                 initialization_scripts: vec![script],
                 zoom: Some(zoom),
+                user_agent: Some(DEFAULT_USER_AGENT.to_string()),
                 ..Default::default()
             },
         ) {
