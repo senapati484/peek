@@ -1,0 +1,15 @@
+[package]
+name = "peek-adblock"
+description = "Ad-blocking configuration, engine and per-site policy for Peek"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+peek-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+adblock = { version = "0.13", features = ["content-blocking"] }
+

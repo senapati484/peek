@@ -1,0 +1,27 @@
+[package]
+name = "peek-app"
+description = "Peek browser binary: window layout, IPC routing, shortcuts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "peek"
+path = "src/main.rs"
+
+[dependencies]
+peek-ipc.workspace = true
+peek-store.workspace = true
+peek-engine.workspace = true
+peek-core.workspace = true
+peek-preview.workspace = true
+peek-adblock.workspace = true
+
+tao.workspace = true
+wry.workspace = true
+serde_json.workspace = true
+include_dir.workspace = true
+directories.workspace = true
+anyhow.workspace = true
+url.workspace = true
