@@ -173,9 +173,21 @@
 
 <div class="root" class:open={focused} onclick={onRootClick} role="presentation">
   <div class="bar">
+    <button
+      class="logo-btn"
+      title="Peek menu"
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        send({ type: 'setDrawer', open: true });
+      }}
+    >
+      <img src="/logo.png" alt="Peek" class="bar-logo" />
+    </button>
     {#if insecure}
       <span class="lock" title="This page is not secure" aria-label="Not secure">!</span>
     {/if}
+
     <input
       bind:this={inputEl}
       bind:value={input}
@@ -244,7 +256,36 @@
     border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   }
 
+  .logo-btn {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    margin-left: -3px;
+    margin-right: -2px;
+    border-radius: 4px;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .logo-btn:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+
+  .bar-logo {
+    width: 17px;
+    height: 17px;
+    border-radius: 4px;
+    display: block;
+    user-select: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+
   input {
+
     flex: 1;
     min-width: 0;
     height: 100%;

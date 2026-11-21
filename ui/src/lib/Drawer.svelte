@@ -101,8 +101,12 @@
 
 <aside class="drawer" onmouseenter={cancelClose} onmouseleave={scheduleClose} aria-label="Peek drawer">
   <header>
-    <div class="brand">Peek</div>
+    <div class="brand">
+      <img src="/logo.png" alt="Peek" class="brand-logo" />
+      <span>Peek</span>
+    </div>
     <nav>
+
       <button class:on={section === 'tabs'} onclick={() => (section = 'tabs')}>Tabs</button>
       <button class:on={section === 'blocking'} onclick={() => (section = 'blocking')}>Blocking</button>
       <button class:on={section === 'settings'} onclick={() => (section = 'settings')}>Settings</button>
@@ -266,11 +270,24 @@
   }
 
   .brand {
-    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
     font-weight: 650;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     margin-bottom: 10px;
   }
+
+  .brand-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    display: block;
+    user-select: none;
+  }
+
 
   nav {
     display: flex;

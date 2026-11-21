@@ -37,10 +37,17 @@ impl AssetProvider for PageAssets {
             "/blank.html" | "/" => UI_DIST
                 .get_file("blank.html")
                 .map(|f| Asset::new("text/html; charset=utf-8", f.contents())),
+            "/logo.png" => UI_DIST
+                .get_file("logo.png")
+                .map(|f| Asset::new("image/png", f.contents())),
+            "/favicon.png" => UI_DIST
+                .get_file("favicon.png")
+                .map(|f| Asset::new("image/png", f.contents())),
             _ => None,
         }
     }
 }
+
 
 fn mime_for(path: &str) -> &'static str {
     match path.rsplit('.').next().unwrap_or("") {
