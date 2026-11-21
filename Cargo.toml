@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/peek-app",
+    "crates/peek-engine",
+    "crates/peek-core",
+    "crates/peek-adblock",
+    "crates/peek-preview",
+    "crates/peek-ext",
+    "crates/peek-store",
+    "crates/peek-ipc",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.80"
+
+[workspace.dependencies]
+peek-ipc = { path = "crates/peek-ipc" }
+peek-store = { path = "crates/peek-store" }
+peek-engine = { path = "crates/peek-engine" }
+peek-core = { path = "crates/peek-core" }
+peek-adblock = { path = "crates/peek-adblock" }
+peek-preview = { path = "crates/peek-preview" }
+peek-ext = { path = "crates/peek-ext" }
+
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.43", features = ["bundled", "serde_json"] }
+url = "2"
+tao = "0.37"
+wry = "0.57"
+include_dir = "0.7"
+directories = "6"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
