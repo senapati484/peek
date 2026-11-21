@@ -14,17 +14,25 @@ pub struct SearchEngine {
 
 impl Default for SearchEngine {
     fn default() -> Self {
-        Self::duckduckgo()
+        Self::google()
     }
 }
 
 impl SearchEngine {
+    pub fn google() -> Self {
+        Self {
+            name: "Google".into(),
+            template: "https://www.google.com/search?q={query}".into(),
+        }
+    }
+
     pub fn duckduckgo() -> Self {
         Self {
             name: "DuckDuckGo".into(),
             template: "https://duckduckgo.com/?q={query}".into(),
         }
     }
+
 
     pub fn search_url(&self, query: &str) -> String {
         let encoded: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();

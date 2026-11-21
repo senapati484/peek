@@ -91,8 +91,14 @@ export function requestState(): void {
 }
 
 export function isBlank(url: string): boolean {
-  return url === 'peek://localhost/blank.html' || url === 'about:blank' || url === '';
+  if (!url) return true;
+  return (
+    url === 'about:blank' ||
+    url.startsWith('peek://') ||
+    url.endsWith('blank.html')
+  );
 }
+
 
 export function displayUrl(url: string): string {
   if (isBlank(url)) return '';

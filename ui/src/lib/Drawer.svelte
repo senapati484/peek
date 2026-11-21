@@ -17,7 +17,8 @@
   let drawerSide = $state<'left' | 'right'>('right');
   let edgeZone = $state(4);
   let startBlank = $state(false);
-  let searchEngine = $state('DuckDuckGo');
+  let searchEngine = $state('Google');
+
 
   let dragId = $state<number | null>(null);
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
