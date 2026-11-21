@@ -1,0 +1,12 @@
+[package]
+name = "peek-engine"
+description = "Engine trait and wry/system-WebView backend for Peek"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tao.workspace = true
+wry.workspace = true
+thiserror.workspace = true
