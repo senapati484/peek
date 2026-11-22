@@ -325,6 +325,9 @@ impl App {
                 _ => {}
             },
             TaoEvent::UserEvent(event) => self.handle_user_event(event),
+            TaoEvent::LoopDestroyed => {
+                self.shutdown();
+            }
             _ => {}
         }
     }
