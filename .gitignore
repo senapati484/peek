@@ -1,6 +1,7 @@
 # Rust build artifacts
 target/
 Peek.app/
+/dist/
 **/*.rs.bk
 
 Cargo.lock.orig

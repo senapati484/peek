@@ -1,151 +1,184 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Peek Browser Logo" width="120" height="120" />
+  <img src="assets/logo.png" alt="Peek Browser Logo" width="128" height="128" />
 </p>
 
 <h1 align="center">Peek</h1>
 
 <p align="center">
-  <strong>An ultra-lightweight, minimalist macOS browser built with Rust and Svelte.</strong><br>
-  Hover previews, edge-revealed vertical tabs, zero-bloat WKWebView engine, and native content blocking.
+  <strong>An ultra-fast, minimalist, distraction-free browser built with Rust and Svelte.</strong><br>
+  Zero-bloat native webview engine, ephemeral hover QuickLook, edge-activated vertical tabs, automatic memory hibernation, and built-in adblocking for macOS, Linux, and Windows.
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> •
-  <a href="#visual-showcase">Screenshots</a> •
-  <a href="#key-features">Features</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#keyboard-shortcuts">Shortcuts</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#contributing">Contributing</a>
+  <a href="https://github.com/senapati484/peek/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/senapati484/peek?color=3b82f6&logo=github&label=Release" alt="Latest Release" /></a>
+  <a href="https://github.com/senapati484/peek/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/senapati484/peek/ci.yml?branch=main&label=CI&logo=githubactions" alt="CI Status" /></a>
+  <a href="https://github.com/senapati484/peek/releases"><img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?logo=apple&logoColor=white" alt="Platform Support" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald?style=flat" alt="MIT License" /></a>
+  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.80%2B-orange?logo=rust" alt="Rust 1.80+" /></a>
+  <img src="https://img.shields.io/badge/Tests-70%2F70%20Passing-success" alt="Tests 70/70 Passing" />
+  <img src="https://img.shields.io/badge/Memory-40--70MB%20Baseline-purple" alt="Memory 40-70MB" />
+</p>
+
+<p align="center">
+  <a href="#-downloads--installers">Downloads</a> •
+  <a href="#-overview">Overview</a> •
+  <a href="#-visual-showcase">Screenshots</a> •
+  <a href="#-key-features">Features</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-keyboard-shortcuts--gestures">Shortcuts</a> •
+  <a href="#-building-from-source">Building</a> •
+  <a href="#-documentation">Documentation</a>
 </p>
 
 ---
 
-## Overview
+## 📦 Downloads & Installers
 
-Modern web browsers have become heavy, distracting desktop operating systems of their own. They consume gigabytes of memory, crowd the screen with toolbars, and encourage tab hoard overload.
+Official release binaries and standalone installer packages are compiled and cryptographically verified on every release:
 
-**Peek** takes the opposite approach:
-- **Ephemeral Chrome:** When browsing, Peek steps out of the way. There are no permanent tab strips or status bars. When you need to navigate, a 36px top omnibar or edge-activated drawer slides into view.
-- **Native OS Engine:** Peek runs on macOS's native `WKWebView` via Rust (`tao` and `wry`). It carries zero Electron overhead, idling around 40–70 MB of baseline RAM.
-- **Link Hover Previews:** Hold `Shift` (or your configured modifier) and hover any link to peek at the target page in a floating preview card. Press Enter or click to promote it to a full tab.
-- **Smart Memory Discarding:** Background tabs that sit idle are automatically discarded from memory while retaining their scroll position and title. When reactivated, they reload seamlessly.
-- **Built-in Content Filtering:** Integrated ad and tracker blocking powered by Brave's native Rust adblock engine with network blocking and cosmetic DOM filters.
-
----
-
-## Visual Showcase
-
-### Minimalist Start Screen
-Clean, distraction-free start screen featuring a centered search box, quick corner navigation chips, and edge touchpoints.
-
-<p align="center">
-  <img src="assets/screenshots/peek-start-dark.png" alt="Peek Dark Start Screen" width="850" />
-</p>
-
-### Fast Omnibar Suggestions
-Instant fuzzy matching across open tabs, visit history (powered by SQLite FTS5), and search engines.
-
-<p align="center">
-  <img src="assets/screenshots/peek-search-suggestions.png" alt="Peek Omnibar Suggestions" width="850" />
-</p>
-
-### Edge-Revealed Vertical Tabs Drawer
-Hover the left screen edge or press `⌘⇧[` to reveal vertical tabs with audio indicators, sleep markers, and drag-and-drop reordering.
-
-<p align="center">
-  <img src="assets/screenshots/peek-vertical-tabs.png" alt="Peek Vertical Tabs Drawer" width="850" />
-</p>
-
-### Settings, Adblock & Multi-Profile Management
-Hover the right edge or press `⌘⇧]` to customize privacy filters, manage separate browsing profiles, and inspect extensions.
-
-<p align="center">
-  <img src="assets/screenshots/peek-settings-profiles.png" alt="Peek Settings and Profiles Drawer" width="850" />
-</p>
+| Platform | Package Format | Architecture | Download Link | Quick Installation |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS** | Apple Disk Image (`.dmg`) | Universal (Apple Silicon & Intel) | [**Peek-macos-universal.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.dmg) | Open DMG & drag `Peek.app` to `/Applications` |
+| **macOS** | Portable Archive (`.zip`) | Universal (Apple Silicon & Intel) | [**Peek-macos-universal.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.zip) | Extract and run `Peek.app` |
+| **Linux** | Native Debian Package (`.deb`) | `x86_64` / `amd64` | [**peek_0.1.0_amd64.deb**](https://github.com/senapati484/peek/releases/download/v0.1.0/peek_0.1.0_amd64.deb) | `sudo dpkg -i peek_0.1.0_amd64.deb` |
+| **Linux** | Standalone Tarball (`.tar.gz`) | `x86_64` | [**Peek-linux-x86_64.tar.gz**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-linux-x86_64.tar.gz) | `tar -xzf Peek-linux-x86_64.tar.gz && ./install.sh` |
+| **Windows** | Portable Archive (`.zip`) | `x86_64` | [**Peek-windows-x86_64.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-windows-x86_64.zip) | Extract and run `Peek.exe` |
+| **Checksums** | SHA256 Verification | All Platforms | [**SHA256SUMS.txt**](https://github.com/senapati484/peek/releases/download/v0.1.0/SHA256SUMS.txt) | `sha256sum -c SHA256SUMS.txt` |
 
 ---
 
-## Key Features
+## ⚡ Overview
 
-- **Dual-Mode Dynamic Interface:**
-  - *Start Mode:* On empty tabs, a centered search input with immediate focus and corner navigation affordances.
-  - *Browse Mode:* A compact 36px top omnibar providing SSL security badges, URL navigation, and quick access to tools.
-- **Modifier-Triggered Live Previews:**
-  - Ephemeral picture-in-picture preview cards appear when hovering links while pressing `Shift` or `⌘`.
-  - Preview webviews run sandboxed, muted, and disappear cleanly when you move your cursor away.
-- **Edge Proximity Drawers:**
-  - Move the cursor to the left edge to view open tabs.
-  - Move to the right edge to access Settings, Profiles, Adblock, and Extensions.
-  - Fully navigable via keyboard shortcuts (`⌘⇧[` and `⌘⇧]`).
-- **Native Adblock & Cosmetic DOM Filtering:**
-  - EasyList and uBlock Origin compatible rule matching.
-  - Sub-millisecond rule evaluation in pure Rust with cosmetic stylesheet injection.
-  - Per-site toggles with real-time blocked counter badges.
-- **Multi-Profile Data Partitioning:**
-  - Switch between work, personal, and research profiles.
-  - Complete isolation of cookies, localStorage, session state, and extension storage.
-- **Fast SQLite Session Store:**
-  - WAL-mode SQLite storage with full-text search (FTS5) for instant history queries.
-  - Preserves open tabs, active tab focus, and window geometry across restarts.
-- **Lightweight WebExtensions MV3 Sandbox:**
-  - Chrome Manifest V3 extension parser with support for declarative content scripts and custom stylesheets.
+Modern web browsers have evolved into monolithic operating systems. They consume gigabytes of RAM, clutter screens with permanent tabs and toolbars, and constantly track user behavior.
+
+**Peek** is engineered for speed, focus, and minimalism:
+
+- **Ephemeral Chrome:** When browsing, Peek completely disappears. There are no static tab strips, status bars, or utility ribbons crowding your viewport. When you need to navigate, a lean 36px omnibar or proximity-activated edge drawer glides into view in sub-millisecond response time.
+- **Zero Electron Bloat:** Peek runs directly on the operating system's native webview engine (`WKWebView` on macOS, `WebKitGTK` on Linux, and `WebView2` on Windows) bound to native Rust via `tao` and `wry`. Baseline memory idles around **40–70 MB RAM** instead of 1.5–2.5 GB.
+- **Space-to-Peek (Finder QuickLook):** Hover any web link or pinned site card and press <kbd>Space</kbd> (or hold <kbd>Shift</kbd>) to instantly pop open a live, sandboxed preview card without leaving your current context or cluttering your tab list.
+- **Smart Memory Discarding:** Background tabs that sit idle are automatically put to sleep by Peek's LRU tab manager while preserving their full title, scroll position, and session state. The UI dashboard reports real-time memory saved (e.g. `570MB saved`). Clicking or navigating to a sleeping tab wakes it instantaneously.
+- **Native Adblock & Anti-Tracking:** Built-in network-level blocking and cosmetic DOM filtering powered by Brave's native Rust adblock engine with EasyList and uBlock Origin compatibility.
 
 ---
 
-## Architecture
+## 🖼️ Visual Showcase
 
-Peek separates pure browser state, native webview orchestration, UI presentation, and storage into modular Rust crates:
+### Vertical Tabs Drawer & Memory Saver Dashboard
+Hover the left screen edge or press `⌘⇧[` to reveal vertical tabs with audio indicators, pinned tabs protection, real-time memory savings statistics, instant tab filtering, and drag-and-drop reordering.
+
+<p align="center">
+  <img src="assets/screenshots/peek-vertical-tabs.png" alt="Peek Vertical Tabs Drawer and Memory Saver Dashboard" width="950" />
+</p>
+
+### Settings, Privacy Engine & Memory Budget
+Hover the right edge or press `⌘⇧]` to customize privacy filters, manage separate browsing profiles, configure LRU memory discard thresholds, and select your preferred search engine.
+
+<p align="center">
+  <img src="assets/screenshots/peek-settings-tools.png" alt="Peek Settings, Content Blocking and Memory Budget" width="950" />
+</p>
+
+### Instant Omnibar Suggestions with SQLite FTS5
+Instant fuzzy search and prefix matching across open tabs, visit history (powered by SQLite Full-Text Search FTS5), and search suggestions.
+
+<p align="center">
+  <img src="assets/screenshots/peek-search-suggestions.png" alt="Peek Omnibar Suggestions and Search" width="950" />
+</p>
+
+### Distraction-Free Light Mode
+A tokenized, contrast-compliant light palette designed for daytime productivity.
+
+<p align="center">
+  <img src="assets/screenshots/peek-start-light.png" alt="Peek Light Mode Start Screen" width="950" />
+</p>
+
+---
+
+## ✨ Key Features
+
+### 🎯 Minimalist Dual-Mode Chrome
+- **Start Mode:** When opening a blank tab (`⌘T`), Peek displays a focused, centered search bar with pinned website speed-dial cards, smooth hover lift, and keyboard navigation affordances.
+- **Browse Mode:** While visiting a website, chrome collapses into an ultra-slim 36px top bar with SSL certificate badges, navigation chevrons, reload status, privacy shield, and active profile avatars.
+
+### 🔍 Space-to-Peek (Live Link QuickLook)
+- Inspired by macOS Finder QuickLook: hover over any link or pinned website card and press <kbd>Space</kbd> (or hold <kbd>Shift</kbd> / <kbd>⌘</kbd>).
+- A sandboxed, floating preview webview instantly renders the destination page without creating a new tab. Release <kbd>Space</kbd> or press <kbd>Esc</kbd> to dismiss.
+
+### ⚡ 0ms Tab Cycling HUD
+- Swiping horizontally with two fingers on the top omnibar or pressing `⌘1`–`⌘9` / `⌘Tab` immediately cycles tabs with zero latency.
+- An ephemeral high-contrast HUD pill (`[Tab 2 of 6] GitHub — Repository`) provides immediate confirmation of tab switches before the page paints.
+
+### 💤 Proactive LRU Tab Hibernation
+- Peek monitors memory pressure and tab idle duration.
+- Tabs exceeding the configured threshold (e.g. 5 live tabs or 10 minutes idle) are safely discarded from RAM while caching their URL, title, favicon, and exact vertical scroll offset.
+- The Tabs drawer shows live statistics (e.g. `1 live • 6 sleeping (570MB saved)`), with a one-click button to **Hibernate Others**.
+
+### 🛡️ Native Rust Content Blocking
+- Integrates Brave's high-performance Rust adblock engine directly into the native request loop.
+- Network requests matching ad, tracker, and telemetry blocklists are stopped before execution.
+- Injects cosmetic CSS element hiding stylesheets into the DOM for clean, distraction-free reading.
+
+### 👤 Multi-Profile Data Partitioning
+- Create dedicated browsing profiles (e.g. *Personal*, *Work*, *Research*).
+- Completely isolates cookies, localStorage, session history, and cache directories between profiles.
+
+---
+
+## 🏛️ Architecture
+
+Peek separates pure browser state, native webview orchestration, UI presentation, and storage into modular, decoupled Rust crates:
 
 ```mermaid
 flowchart TD
-    Window["macOS Window (tao)"] --> Engine["Engine Backend (wry / WKWebView)"]
-    Engine --> UI["UI Chrome (Svelte 5 / peek://)"]
-    Engine --> Tabs["Tab WebViews (Page Contexts)"]
-    Engine --> Preview["Preview WebViews (Isolated Ephemeral)"]
+    Window["Desktop Window (tao: macOS / Linux / Windows)"] --> Engine["Engine Abstraction (wry)"]
+    Engine --> WebViews["Native Child WebViews"]
+    WebViews --> UI["Chrome UI Webview (Svelte 5 / peek://)"]
+    WebViews --> Pages["Tab Content Webviews (WKWebView / WebKitGTK / WebView2)"]
+    WebViews --> Previews["Ephemeral Preview Webview (Sandboxed QuickLook)"]
 
-    App["peek-app (Event Loop & State Sync)"] --> Core["peek-core (Tab Lifecycle & Discard LRU)"]
-    App --> Adblock["peek-adblock (Brave Engine & Filters)"]
+    App["peek-app (Event Loop & Bounds Orchestration)"] --> Core["peek-core (Tab LRU, URLs & Navigation)"]
+    App --> Adblock["peek-adblock (Brave Adblock Engine in Rust)"]
     App --> Store["peek-store (SQLite WAL & FTS5 History)"]
-    App --> Ext["peek-ext (Chrome MV3 Extensions)"]
-    App <-->|Typed Nonce IPC| UI
+    App --> Ext["peek-ext (Chrome Manifest V3 Host)"]
+    App <-->|Cryptographic Nonce Typed IPC| UI
 ```
 
-### Crate Organization
+### Crate Breakdown
 
 | Crate | Responsibility |
 | :--- | :--- |
-| **`peek-app`** | Desktop executable, Tao event loop, macOS Dock/menu integration, window bounds geometry. |
-| **`peek-engine`** | Trait abstractions over `wry` webview creation, navigation events, and custom asset protocol handlers. |
-| **`peek-core`** | Pure domain logic: tab collection, activation history, LRU tab discarding, and search query resolver. |
-| **`peek-adblock`** | Brave adblock engine wrapper, network request filters, and cosmetic element hiding. |
-| **`peek-preview`** | Hover coordinate geometry, dwell timing, and window clamping algorithms. |
-| **`peek-ext`** | Manifest V3 parser, CRX package unpacking, and content script registration. |
-| **`peek-store`** | SQLite persistence for tabs, sessions, bookmarks, cookies, and FTS5 search. |
-| **`peek-ipc`** | Typed JSON message protocol secured with cryptographic session nonces. |
-| **`ui/`** | Front-end interface written in Svelte 5 (Runes) and compiled via Vite into static `peek://` assets. |
+| [**`peek-app`**](crates/peek-app) | Desktop executable entry point, Tao event loop, pre-warmed drawer webview, bounds geometry, and dock/menu integration. |
+| [**`peek-engine`**](crates/peek-engine) | Trait abstractions over `wry` webview creation, navigation hooks, subframe filtering, and custom `peek://` asset protocol handlers. |
+| [**`peek-core`**](crates/peek-core) | Pure domain logic: tab collection, activation history, LRU tab discarding, session restoration, and search query resolver. |
+| [**`peek-adblock`**](crates/peek-adblock) | Brave adblock engine wrapper, network request filters, and cosmetic element hiding. |
+| [**`peek-preview`**](crates/peek-preview) | Hover coordinate geometry, dwell timing, and window clamping algorithms. |
+| [**`peek-ext`**](crates/peek-ext) | Manifest V3 parser, CRX package unpacking, and content script registration. |
+| [**`peek-store`**](crates/peek-store) | SQLite persistence (WAL mode) for tabs, sessions, bookmarks, cookies, and FTS5 full-text search. |
+| [**`peek-ipc`**](crates/peek-ipc) | Typed JSON message protocol secured with cryptographic session nonces. |
+| [**`ui/`**](ui) | User interface written in Svelte 5 (Runes) and compiled via Vite into static assets embedded in the binary. |
 
 ---
 
-## Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts & Gestures
 
-| Shortcut | Action |
-| :--- | :--- |
-| `⌘ T` | Open a new blank tab (reveals centered omnibar) |
-| `⌘ W` | Close the current active tab |
-| `⌘ L` | Focus the address bar / omnibar |
-| `⌘ R` | Reload current page |
-| `⌘ 1` – `⌘ 9` | Switch directly to tab 1 through 9 |
-| `⌘ ⇧ [` | Toggle vertical tabs drawer (left side) |
-| `⌘ ⇧ ]` | Toggle settings & tools drawer (right side) |
-| `⌥ ←` | Navigate back in history |
-| `⌥ →` | Navigate forward in history |
-| `Shift + Hover` | Live link hover preview card |
-| `Esc` | Close open drawer / dismiss suggestions / cancel preview |
+| Shortcut | Gesture / Key | Action |
+| :--- | :--- | :--- |
+| `⌘ T` / `Ctrl T` | Press | Open a new blank tab (reveals centered omnibar & pinned sites) |
+| `⌘ W` / `Ctrl W` | Press | Close current active tab (or selected tab in drawer) |
+| `⌘ L` / `Ctrl L` | Press | Focus the address and search omnibar |
+| `⌘ R` / `Ctrl R` | Press | Reload current page |
+| `⌘ 1` – `⌘ 9` | Press | Switch directly to tab 1 through 9 |
+| `⌘ ⇧ [` / `Ctrl ⇧ [` | Press / Hover Left Edge | Toggle vertical tabs drawer |
+| `⌘ ⇧ ]` / `Ctrl ⇧ ]` | Press / Hover Right Edge | Toggle settings & tools drawer |
+| `⌥ ←` / `Alt ←` | Press | Navigate back in browsing history |
+| `⌥ →` / `Alt →` | Press | Navigate forward in browsing history |
+| `Space` | Press while hovering | **Space-to-Peek:** Live QuickLook preview of link or pinned site |
+| `Shift + Hover` | Hover with modifier | Live link preview card |
+| `⇄ Swipe Bar` | 2-finger horizontal swipe | Cycle rapidly between open tabs with HUD feedback |
+| `Esc` | Press | Dismiss preview / close drawer / clear tab filter |
 
 ---
 
-## Getting Started
+## 🛠️ Building from Source
 
 ### Prerequisites
 
@@ -153,19 +186,19 @@ flowchart TD
   ```bash
   rustup default stable
   ```
-- **Node.js:** Node.js 18+ and npm for compiling the UI assets:
+- **Node.js:** Node.js 18+ and npm for compiling the Svelte frontend:
   ```bash
   node --version
   ```
-- **Platform Dependencies:**
-  - **macOS:** macOS 12.0 or newer with Xcode Command Line Tools (`xcode-select --install`).
-  - **Linux:** GTK 3 and WebKitGTK development libraries:
+- **System Dependencies:**
+  - **macOS:** macOS 12.0+ with Xcode Command Line Tools (`xcode-select --install`).
+  - **Linux:** GTK 3, WebKitGTK, and libayatana-appindicator:
     ```bash
-    sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+    sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev dpkg-dev
     ```
   - **Windows:** Microsoft Edge WebView2 runtime (pre-installed on Windows 10 & 11) and MSVC C++ Build Tools.
 
-### Development Setup
+### Development Workflow
 
 1. **Clone the repository:**
    ```bash
@@ -173,7 +206,7 @@ flowchart TD
    cd peek
    ```
 
-2. **Install UI dependencies and build the Svelte bundle:**
+2. **Build frontend assets:**
    ```bash
    cd ui
    npm install
@@ -181,7 +214,7 @@ flowchart TD
    cd ..
    ```
 
-3. **Run the test suite:**
+3. **Run the test suite (70 tests):**
    ```bash
    cargo test --workspace
    ```
@@ -191,31 +224,31 @@ flowchart TD
    cargo run -p peek-app
    ```
 
-### Building Release Packages
+### Building Standalone Release Installers
 
-Peek includes automated packaging scripts for each platform:
+Peek includes automated build and packaging scripts for each platform:
 
-- **macOS (`Peek.app` & Universal DMG):**
+- **macOS (Generates `Peek.app` & Universal DMG):**
   ```bash
   ./scripts/build_app.sh
   open Peek.app
   ```
 
-- **Linux (`Peek-linux-x86_64.tar.gz` & `.deb`):**
+- **Linux (Generates `Peek-linux-x86_64.tar.gz` & `.deb` package):**
   ```bash
   ./scripts/build_linux.sh
   ```
 
-- **Windows (`Peek-windows-x86_64.zip`):**
+- **Windows (Generates `Peek-windows-x86_64.zip`):**
   ```powershell
   .\scripts\build_windows.ps1
   ```
 
 ---
 
-## Documentation
+## 📚 Documentation
 
-In-depth technical guides and architectural specifications are available in the [`docs/`](docs/) directory:
+Detailed architectural deep-dives and engineering documentation are maintained in the [`docs/`](docs/) directory:
 
 - 🏛️ **[System Architecture](docs/architecture.md)** — Multi-child webview layout, subframe isolation, typed IPC engine, LRU memory lifecycle, and native adblocking.
 - 🗄️ **[Database & Storage Engine](docs/database.md)** — SQLite WAL mode, FTS5 prefix search index, sync triggers, table schemas, and profile isolation.
@@ -223,19 +256,19 @@ In-depth technical guides and architectural specifications are available in the 
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions from the open-source community are welcome! Whether you are fixing bugs, improving the Svelte UI, optimizing Rust webview handlers, or enhancing documentation:
+Contributions from the open-source community are warmly welcomed!
 
-1. Fork the repository and create your branch: `git checkout -b feature/my-feature`.
+1. Fork the repository and create your feature branch: `git checkout -b feature/amazing-feature`.
 2. Ensure all tests pass: `cargo test --workspace`.
-3. Verify the frontend: `cd ui && npm run build && npx svelte-check`.
-4. Submit a clear, descriptive Pull Request.
+3. Check UI bundle integrity: `cd ui && npx svelte-check && npm run build`.
+4. Commit your changes and open a descriptive Pull Request.
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines on architecture standards, code style, and testing requirements.
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) for code style, architectural constraints, and PR guidelines.
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the open-source MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the open-source [MIT License](LICENSE).
