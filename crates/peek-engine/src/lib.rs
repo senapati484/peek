@@ -175,6 +175,8 @@ pub trait Engine {
     fn set_zoom(&self, id: WebViewId, zoom: f64) -> Result<()>;
     fn cookies(&self, id: WebViewId) -> Result<Vec<cookie::Cookie<'static>>>;
     fn set_cookie(&self, id: WebViewId, cookie: &cookie::Cookie<'_>) -> Result<()>;
+    fn bring_to_front(&self, id: WebViewId) -> Result<()>;
+    fn send_to_back(&self, id: WebViewId) -> Result<()>;
 }
 
 pub struct WryEngine {
@@ -410,6 +412,50 @@ impl Engine for WryEngine {
 
     fn set_cookie(&self, id: WebViewId, cookie: &cookie::Cookie<'_>) -> Result<()> {
         let _ = self.view(id)?.set_cookie(cookie);
+        Ok(())
+    }
+
+    fn bring_to_front(&self, id: WebViewId) -> Result<()> {
+        let webview = self.view(id)?;
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::msg_send;
+            use wry::WebViewExtMacOS;
+            let wk = webview.webview();
+            unsafe {
+                let superview: *mut objc2::runtime::AnyObject = msg_send![&*wk, superview];
+                if !superview.is_null() {
+                    let () = msg_send![
+                        superview,
+                        addSubview: &*wk,
+                        positioned: 1isize, // NSWindowAbove = 1
+                        relativeTo: std::ptr::null::<objc2::runtime::AnyObject>()
+                    ];
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn send_to_back(&self, id: WebViewId) -> Result<()> {
+        let webview = self.view(id)?;
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::msg_send;
+            use wry::WebViewExtMacOS;
+            let wk = webview.webview();
+            unsafe {
+                let superview: *mut objc2::runtime::AnyObject = msg_send![&*wk, superview];
+                if !superview.is_null() {
+                    let () = msg_send![
+                        superview,
+                        addSubview: &*wk,
+                        positioned: -1isize, // NSWindowBelow = -1
+                        relativeTo: std::ptr::null::<objc2::runtime::AnyObject>()
+                    ];
+                }
+            }
+        }
         Ok(())
     }
 }

@@ -621,6 +621,7 @@ impl App {
                         let bounds = self.chrome_bounds();
                         let _ = self.engine.set_bounds(id, bounds);
                     }
+                    self.ensure_layer_order();
                     if !open {
                         if let Some(view) = self.active_view() {
                             let _ = self.engine.focus(view);
@@ -1076,6 +1077,7 @@ impl App {
                 let _ = self.engine.focus(id);
             }
         }
+        self.ensure_layer_order();
     }
 
     fn create_tab_view(&mut self, id: TabId, url: &str) -> anyhow::Result<()> {
@@ -1118,6 +1120,7 @@ impl App {
         self.tab_views.insert(id, view);
         self.view_tabs.insert(view, id);
         self.tabs.mark_live(id);
+        self.ensure_layer_order();
         if !is_blank {
             let _ = self.engine.focus(view);
         }
@@ -1180,6 +1183,23 @@ impl App {
         Ok(())
     }
 
+    fn ensure_layer_order(&self) {
+        if let Some(view) = self.active_view() {
+            let _ = self.engine.send_to_back(view);
+        }
+        if let Some(ui_id) = self.ui_id {
+            let _ = self.engine.bring_to_front(ui_id);
+        }
+        if self.drawer_open {
+            if let Some(drawer_id) = self.drawer_id {
+                let _ = self.engine.bring_to_front(drawer_id);
+            }
+        }
+        if let Some(preview_id) = self.preview_id {
+            let _ = self.engine.bring_to_front(preview_id);
+        }
+    }
+
     fn open_drawer_on_side(&mut self, side: EdgeSide, section: Option<&str>) {
         self.current_drawer_side = side;
         let bounds = self.drawer_bounds_for_side(side);
@@ -1196,8 +1216,9 @@ impl App {
         if let Some(id) = self.drawer_id {
             let _ = self.engine.set_bounds(id, bounds);
             let _ = self.engine.set_visible(id, true);
-            let _ = self.engine.focus(id);
             self.drawer_open = true;
+            self.ensure_layer_order();
+            let _ = self.engine.focus(id);
             self.send(Event::DrawerState {
                 open: true,
                 side: Some(side),
@@ -1231,6 +1252,7 @@ impl App {
             Ok(id) => {
                 self.drawer_id = Some(id);
                 self.drawer_open = true;
+                self.ensure_layer_order();
                 let _ = self.engine.focus(id);
                 self.send(Event::DrawerState {
                     open: true,
@@ -1257,6 +1279,7 @@ impl App {
                 section: None,
             });
         }
+        self.ensure_layer_order();
         if self.is_active_blank() {
             if let Some(id) = self.ui_id {
                 let _ = self.engine.focus(id);
@@ -1270,6 +1293,7 @@ impl App {
         if let Some(id) = self.preview_id {
             let _ = self.engine.set_bounds(id, bounds);
             let _ = self.engine.set_visible(id, true);
+            let _ = self.engine.bring_to_front(id);
             let _ = self.engine.load_url(id, url);
             return;
         }
@@ -1300,6 +1324,7 @@ impl App {
         ) {
             Ok(id) => {
                 self.preview_id = Some(id);
+                let _ = self.engine.bring_to_front(id);
                 let _ = self.engine.focus(id);
             }
             Err(error) => {
@@ -1366,6 +1391,7 @@ impl App {
             let _ = self.engine.set_bounds(id, self.drawer_bounds());
         }
         self.hide_preview();
+        self.ensure_layer_order();
         if is_blank {
             if let Some(id) = self.ui_id {
                 let _ = self.engine.focus(id);
