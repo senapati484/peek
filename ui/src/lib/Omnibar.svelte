@@ -582,31 +582,6 @@
             <span class="profile-chip-name">{activeProfile}</span>
           </button>
         </div>
-
-        <!-- Left & Right Edge Touchpoint Indicators -->
-        <button
-          class="edge-hover-indicator left"
-          title="Hover left edge to view Tabs"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-          }}
-        >
-          <span class="edge-indicator-bar"></span>
-        </button>
-
-        <button
-          class="edge-hover-indicator right"
-          title="Hover right edge to view Settings"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-          }}
-        >
-          <span class="edge-indicator-bar"></span>
-        </button>
       {/if}
 
       <div class="hero-brand">
@@ -676,70 +651,91 @@
         {/if}
       </div>
 
-      <!-- Pinned Websites Speed Dial Grid -->
-      <div class="pinned-section">
-        <div class="pinned-grid">
-          {#each pinnedSites as site (site.id)}
-            <div class="pin-card-wrap">
-              <button
-                class="pin-card"
-                type="button"
-                title={`${site.title || cleanDomain(site.url)}\n${site.url}\n(Space to Peek)`}
-                data-preview-url={site.url}
-                onclick={() => handleOpenPin(site.url)}
-                onmouseenter={(e) => {
-                  hoveredPinUrl = site.url;
-                  hoveredPinEl = e.currentTarget;
-                  if (e.shiftKey) triggerPinPreview(site.url, e.currentTarget);
-                }}
-                onmouseleave={() => {
-                  hoveredPinUrl = null;
-                  hoveredPinEl = null;
-                  dismissPinPreview();
-                }}
-              >
-                <div class="pin-icon-box">
-                  {#if site.favicon}
-                    <img
-                      src={site.favicon}
-                      alt=""
-                      class="pin-favicon"
-                      onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                    />
-                  {:else}
-                    <span class="pin-initial">{domainInitial(site.url)}</span>
-                  {/if}
-                </div>
-                <span class="pin-title">{site.title || cleanDomain(site.url)}</span>
-              </button>
-              <button
-                class="pin-remove-btn"
-                type="button"
-                title={`Unpin ${site.title || site.url}`}
-                onclick={(e) => handleUnpin(site.url, e)}
-                aria-label={`Unpin ${site.title || site.url}`}
-              >
-                ×
-              </button>
-            </div>
-          {/each}
+      {#if !input.trim() && !suggestions.length}
+        <!-- Pinned Websites Speed Dial Grid -->
+        <div class="pinned-section">
+          <div class="pinned-grid">
+            {#each pinnedSites as site (site.id)}
+              <div class="pin-card-wrap">
+                <button
+                  class="pin-card"
+                  type="button"
+                  title={`${site.title || cleanDomain(site.url)}\n${site.url}\n(Space to Peek)`}
+                  data-preview-url={site.url}
+                  onclick={() => handleOpenPin(site.url)}
+                  onmouseenter={(e) => {
+                    hoveredPinUrl = site.url;
+                    hoveredPinEl = e.currentTarget;
+                    if (e.shiftKey) triggerPinPreview(site.url, e.currentTarget);
+                  }}
+                  onmouseleave={() => {
+                    hoveredPinUrl = null;
+                    hoveredPinEl = null;
+                    dismissPinPreview();
+                  }}
+                >
+                  <div class="pin-icon-box">
+                    {#if site.favicon}
+                      <img
+                        src={site.favicon}
+                        alt=""
+                        class="pin-favicon"
+                        onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                      />
+                    {:else}
+                      <span class="pin-initial">{domainInitial(site.url)}</span>
+                    {/if}
+                  </div>
+                  <span class="pin-title">{site.title || cleanDomain(site.url)}</span>
+                </button>
+                <button
+                  class="pin-remove-btn"
+                  type="button"
+                  title={`Unpin ${site.title || site.url}`}
+                  onclick={(e) => handleUnpin(site.url, e)}
+                  aria-label={`Unpin ${site.title || site.url}`}
+                >
+                  ×
+                </button>
+              </div>
+            {/each}
 
-          <!-- Add Pin Button -->
-          <button
-            class="pin-card add-pin-card"
-            type="button"
-            title="Pin a website"
-            onclick={() => { showAddPinModal = true; }}
-          >
-            <div class="pin-icon-box add-box">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="add-icon">
-                <path d="M8 3.5v9M3.5 8h9" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <span class="pin-title">Add Pin</span>
-          </button>
+            <!-- Add Pin Button -->
+            <button
+              class="pin-card add-pin-card"
+              type="button"
+              title="Pin a website"
+              onclick={() => { showAddPinModal = true; }}
+            >
+              <div class="pin-icon-box add-box">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="add-icon">
+                  <path d="M8 3.5v9M3.5 8h9" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <span class="pin-title">Add Pin</span>
+            </button>
+          </div>
         </div>
-      </div>
+
+        <!-- Minimalist Keyboard & Gesture Affordances -->
+        <div class="start-hints-row" aria-label="Shortcuts and Gestures">
+          <span class="start-hint-pill">
+            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
+            <kbd class="start-kbd">Space</kbd> Link Peek
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
+            <span class="start-hint-icon">⇄</span> Swipe to Switch
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
+            <span class="start-hint-icon">⇥</span> Edge Drawers
+          </span>
+        </div>
+      {/if}
 
       {#if showAddPinModal}
         <div
@@ -787,25 +783,6 @@
           </div>
         </div>
       {/if}
-
-      <!-- Minimalist Keyboard & Gesture Affordances -->
-      <div class="start-hints-row" aria-label="Shortcuts and Gestures">
-        <span class="start-hint-pill">
-          <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
-        </span>
-        <span class="start-hint-dot">•</span>
-        <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
-          <kbd class="start-kbd">Space</kbd> Link Peek
-        </span>
-        <span class="start-hint-dot">•</span>
-        <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
-          <span class="start-hint-icon">⇄</span> Swipe to Switch
-        </span>
-        <span class="start-hint-dot">•</span>
-        <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
-          <span class="start-hint-icon">⇥</span> Edge Drawers
-        </span>
-      </div>
     </div>
   {:else}
     <!-- Docked Minimalist Top Bar -->
@@ -1125,49 +1102,6 @@
     border-color: var(--border);
   }
 
-  /* Edge touchpoint indicators */
-  .edge-hover-indicator {
-    all: unset;
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 15;
-    opacity: 0.4;
-    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .edge-hover-indicator.left {
-    left: 2px;
-  }
-
-  .edge-hover-indicator.right {
-    right: 2px;
-  }
-
-  .edge-hover-indicator:hover {
-    opacity: 1;
-    transform: translateY(-50%) scale(1.3);
-  }
-
-  .edge-indicator-bar {
-    width: 3.5px;
-    height: 100%;
-    border-radius: 9999px;
-    background: var(--border);
-    transition: background 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .edge-hover-indicator:hover .edge-indicator-bar {
-    background: var(--accent);
-    box-shadow: 0 0 10px var(--accent-glow);
-  }
-
   .start-profile-chip {
     all: unset;
     display: inline-flex;
@@ -1254,6 +1188,7 @@
     width: 100%;
     max-width: min(620px, calc(100vw - 48px));
     position: relative;
+    z-index: 100;
     border-radius: 9999px;
     background: color-mix(in srgb, var(--surface) 85%, transparent);
     border: 1px solid var(--border);
@@ -1325,20 +1260,20 @@
 
   .start-suggestions {
     position: absolute;
-    top: calc(100% + 10px);
+    top: calc(100% + 8px);
     left: 0;
     right: 0;
     border: 1px solid var(--border);
-    border-radius: 18px;
-    background: var(--panel);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 98%, #000);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 4px 16px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
     padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 3px;
-    z-index: 50;
+    z-index: 100;
     animation: dropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
