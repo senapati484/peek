@@ -78,8 +78,8 @@ impl Settings {
                     .unwrap_or(defaults.zoom),
                 gap: defaults.gap,
                 modifier_only: store
-                    .get_setting_or("previewModifierOnly", false)
-                    .unwrap_or(false),
+                    .get_setting_or("previewModifierOnly", true)
+                    .unwrap_or(true),
             },
             drawer_side: store
                 .get_setting_or("drawerSide", EdgeSide::Right)
@@ -797,8 +797,9 @@ impl App {
                 TabAction::Destroy { id } => self.destroy_tab_view(id),
                 TabAction::Show { id, visible } => {
                     if let Some(view) = self.tab_views.get(&id).copied() {
-                        let _ = self.engine.set_visible(view, visible);
-                        if visible {
+                        let should_show = visible && !self.is_active_blank();
+                        let _ = self.engine.set_visible(view, should_show);
+                        if should_show {
                             let _ = self.engine.focus(view);
                         }
                     }
@@ -806,8 +807,11 @@ impl App {
                 TabAction::Load { id, url } => {
                     if let Some(view) = self.tab_views.get(&id).copied() {
                         let _ = self.engine.load_url(view, &url);
-                        let _ = self.engine.set_visible(view, true);
-                        let _ = self.engine.focus(view);
+                        let is_blank = peek_core::url::is_blank(&url);
+                        let _ = self.engine.set_visible(view, !is_blank);
+                        if !is_blank {
+                            let _ = self.engine.focus(view);
+                        }
                     }
                 }
                 TabAction::Scroll { id, y } => {
@@ -822,6 +826,10 @@ impl App {
         if let Some(id) = self.ui_id {
             let bounds = self.chrome_bounds();
             let _ = self.engine.set_bounds(id, bounds);
+            if self.is_active_blank() {
+                let _ = self.engine.set_visible(id, true);
+                let _ = self.engine.focus(id);
+            }
         }
     }
 
@@ -839,12 +847,14 @@ impl App {
             },
             self.settings.edge_zone,
         );
+        let is_blank = peek_core::url::is_blank(url);
         let view = self.engine.create(
             &self.window,
             WebViewOptions {
                 bounds: self.page_bounds(),
                 url: Some(url.to_string()),
                 assets: Some(Arc::new(PageAssets)),
+                visible: !is_blank,
                 initialization_scripts: vec![script],
                 accept_first_mouse: true,
                 data_directory: Some(self.profile_web_data_dir.clone()),
@@ -858,7 +868,9 @@ impl App {
         self.tab_views.insert(id, view);
         self.view_tabs.insert(view, id);
         self.tabs.mark_live(id);
-        let _ = self.engine.focus(view);
+        if !is_blank {
+            let _ = self.engine.focus(view);
+        }
         Ok(())
     }
 
@@ -996,6 +1008,9 @@ impl App {
                 initialization_scripts: vec![script],
                 zoom: Some(zoom),
                 user_agent: Some(DEFAULT_USER_AGENT.to_string()),
+                corner_radius: Some(14.0),
+                border_width: Some(1.5),
+                border_color: Some([0.35, 0.55, 0.95, 0.65]),
                 ..Default::default()
             },
         ) {
@@ -1052,14 +1067,23 @@ impl App {
         if let Some(id) = self.ui_id {
             let _ = self.engine.set_bounds(id, self.chrome_bounds());
         }
+        let is_blank = self.is_active_blank();
         let page = self.page_bounds();
         for view in self.tab_views.values() {
             let _ = self.engine.set_bounds(*view, page);
+            if is_blank {
+                let _ = self.engine.set_visible(*view, false);
+            }
         }
         if let Some(id) = self.drawer_id {
             let _ = self.engine.set_bounds(id, self.drawer_bounds());
         }
         self.hide_preview();
+        if is_blank {
+            if let Some(id) = self.ui_id {
+                let _ = self.engine.focus(id);
+            }
+        }
     }
 
     fn is_active_blank(&self) -> bool {

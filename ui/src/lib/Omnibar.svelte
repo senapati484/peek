@@ -19,17 +19,10 @@
   let insecure = $state(false);
   let loading = $state(false);
   let searchEngine = $state('Google');
+  let activeProfile = $state('default');
+  let profileInitial = $derived((activeProfile[0] || 'D').toUpperCase());
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
-
-  const topSites = [
-    { name: 'Google', url: 'https://www.google.com', icon: 'G' },
-    { name: 'GitHub', url: 'https://github.com', icon: 'GH' },
-    { name: 'YouTube', url: 'https://www.youtube.com', icon: 'YT' },
-    { name: 'Reddit', url: 'https://www.reddit.com', icon: 'R' },
-    { name: 'Wikipedia', url: 'https://www.wikipedia.org', icon: 'W' },
-    { name: 'X', url: 'https://x.com', icon: '𝕏' },
-  ];
 
   let isStartPage = $derived(isBlank(activeUrl));
 
@@ -139,6 +132,9 @@
       case 'settings':
         searchEngine = event.searchEngine || 'Google';
         break;
+      case 'profilesList':
+        activeProfile = event.active || 'default';
+        break;
       default:
         break;
     }
@@ -224,14 +220,28 @@
   role="presentation"
 >
   {#if isStartPage}
-    <!-- Center Start Page Layout -->
+    <!-- Center Start Page Layout: Logo + Search Bar Simple -->
     <div class="start-center">
+      <!-- Profile Badge in Top Corner -->
+      <div class="start-profile-corner">
+        <button
+          class="start-profile-chip"
+          title={`Active Profile: ${activeProfile} (Click to switch)`}
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
+          }}
+        >
+          <span class="profile-avatar-dot">{profileInitial}</span>
+          <span class="profile-chip-name">{activeProfile}</span>
+        </button>
+      </div>
+
       <div class="hero-brand">
         <div class="logo-wrapper">
           <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
         </div>
-        <h1 class="hero-title">Peek</h1>
-        <p class="hero-subtitle">Hover to preview. Edge to explore.</p>
       </div>
 
       <div class="search-box">
@@ -293,29 +303,6 @@
             {/each}
           </div>
         {/if}
-      </div>
-
-      <!-- Quick Launch Top Sites -->
-      <div class="top-sites-grid">
-        {#each topSites as site}
-          <button
-            class="site-card"
-            onclick={() => submit(site.url)}
-            title={site.url}
-            type="button"
-          >
-            <div class="site-icon">{site.icon}</div>
-            <span class="site-name">{site.name}</span>
-          </button>
-        {/each}
-      </div>
-
-      <!-- Shortcuts Pill Row -->
-      <div class="shortcuts-row">
-        <span class="shortcut-pill"><kbd>⌘ L</kbd> Address / Search</span>
-        <span class="shortcut-pill"><kbd>⌘ + Hover</kbd> Live Preview</span>
-        <span class="shortcut-pill"><kbd>⌘ ⇧ [</kbd> Tabs Drawer</span>
-        <span class="shortcut-pill"><kbd>⌘ ⇧ ]</kbd> Settings</span>
       </div>
     </div>
   {:else}
@@ -446,6 +433,19 @@
           </svg>
         </button>
 
+        <!-- Profile Button -->
+        <button
+          class="tool-btn profile-btn"
+          title={`Profile: ${activeProfile} (Click to manage)`}
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
+          }}
+        >
+          <span class="profile-avatar-pill">{profileInitial}</span>
+        </button>
+
         <!-- Settings Button -->
         <button
           class="tool-btn settings-btn"
@@ -509,14 +509,64 @@
 
   /* Center Start Page Layout */
   .start-center {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
     padding: 32px 24px;
-    background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 60%);
+    background: #ffffff;
     animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .start-profile-corner {
+    position: absolute;
+    top: 18px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+  }
+
+  .start-profile-chip {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px 4px 6px;
+    border-radius: 9999px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
+  }
+
+  .start-profile-chip:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  .profile-avatar-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+
+  .profile-chip-name {
+    letter-spacing: -0.01em;
   }
 
   @keyframes fadeIn {
@@ -534,52 +584,30 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
 
   .logo-wrapper {
     position: relative;
-    margin-bottom: 14px;
+    margin-bottom: 0;
   }
 
   .logo-wrapper::after {
-    content: '';
-    position: absolute;
-    inset: -6px;
-    border-radius: 20px;
-    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-    filter: blur(10px);
-    z-index: 0;
-    opacity: 0.6;
+    display: none;
   }
 
   .hero-logo {
     position: relative;
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    width: 76px;
+    height: 76px;
+    border-radius: 18px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
     z-index: 1;
     transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hero-logo:hover {
-    transform: scale(1.06) rotate(1deg);
-  }
-
-  .hero-title {
-    margin: 0;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    color: var(--text);
-  }
-
-  .hero-subtitle {
-    margin: 6px 0 0;
-    font-size: 13.5px;
-    color: var(--muted);
-    letter-spacing: 0.01em;
+    transform: scale(1.05);
   }
 
   .search-box {
@@ -587,15 +615,15 @@
     max-width: 580px;
     position: relative;
     border-radius: var(--radius-lg);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .search-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.25), 0 0 0 2.5px var(--accent-soft);
+    border-color: #3b82f6;
+    box-shadow: 0 8px 30px rgba(59, 130, 246, 0.15), 0 0 0 3px rgba(59, 130, 246, 0.12);
   }
 
   .search-input-wrap {
@@ -672,92 +700,16 @@
     background: var(--hover);
   }
 
-  /* Top Sites Grid */
-  .top-sites-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 12px;
-    max-width: 580px;
-    width: 100%;
-    margin-top: 24px;
-  }
-
-  .site-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 7px;
-    padding: 10px 6px;
-    border-radius: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    transition: transform 0.18s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-
-  .site-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--accent);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .site-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: var(--panel);
-    border: 1px solid var(--border-subtle);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--accent);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  }
-
-  .site-name {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-
-  .shortcuts-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 28px;
-    flex-wrap: wrap;
-  }
-
-  .shortcut-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11.5px;
-    color: var(--muted);
-    padding: 5px 9px;
-    border-radius: 7px;
-    background: color-mix(in srgb, var(--surface) 60%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  }
-
-  kbd {
-    display: inline-block;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    font-family: inherit;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--text);
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
-  }
-
-  /* Docked Top Bar */
+  /* Docked Top Bar: Clean Full-White Toolbar */
   .bar-container {
     width: 100%;
+    height: 36px;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    box-sizing: border-box;
     pointer-events: auto;
   }
 
@@ -765,33 +717,21 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    height: 30px;
-    margin: 3px 10px;
+    height: 28px;
+    width: 100%;
+    margin: 0;
     padding: 0 8px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--panel) 92%, transparent);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease, box-shadow 0.15s ease;
-    animation: dockSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @keyframes dockSlide {
-    from {
-      opacity: 0.7;
-      transform: translateY(-6px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    border: 1px solid #e5e7eb;
+    border-radius: 7px;
+    background: #f9fafb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
   }
 
   .bar:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18), 0 0 0 2px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
   }
 
   .logo-btn {
@@ -927,6 +867,35 @@
   .tool-btn:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  .profile-btn {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 1px;
+    border-radius: 50%;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .profile-btn:hover {
+    transform: scale(1.08);
+    opacity: 0.9;
+  }
+
+  .profile-avatar-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
   }
 
   .tool-icon {

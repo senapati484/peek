@@ -316,23 +316,25 @@ const PAGE_SCRIPT: &str = r##"
 
   document.addEventListener("mouseover", function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
-    if (!previewable(a) || a === hoverAnchor) return;
+    if (!previewable(a)) {
+      if (hoverAnchor && a !== hoverAnchor) clearHover(true);
+      return;
+    }
     if (hoverTimer) clearTimeout(hoverTimer);
     hoverAnchor = a;
     hoverUrl = a.href;
+    if (!isPreviewMod(ev)) return;
     var rect = a.getBoundingClientRect();
-    var forced = isPreviewMod(ev);
-    var delay = forced ? 80 : HOVER_MS;
     hoverTimer = setTimeout(function () {
       hoverTimer = null;
       if (!hoverAnchor) return;
       send({
         type: "hover",
         url: hoverUrl,
-        forced: forced,
+        forced: true,
         rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
       });
-    }, delay);
+    }, 80);
   }, true);
 
   document.addEventListener("keydown", function (ev) {
@@ -344,6 +346,16 @@ const PAGE_SCRIPT: &str = r##"
         forced: true,
         rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
       });
+    }
+  }, true);
+
+  document.addEventListener("keyup", function (ev) {
+    if (!isPreviewMod(ev)) {
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+      }
+      clearHover(true);
     }
   }, true);
 

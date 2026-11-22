@@ -124,6 +124,9 @@ pub struct WebViewOptions {
     pub user_agent: Option<String>,
     pub data_directory: Option<PathBuf>,
     pub data_store_identifier: Option<[u8; 16]>,
+    pub corner_radius: Option<f64>,
+    pub border_width: Option<f64>,
+    pub border_color: Option<[f64; 4]>,
 }
 
 impl Default for WebViewOptions {
@@ -144,6 +147,9 @@ impl Default for WebViewOptions {
             user_agent: None,
             data_directory: None,
             data_store_identifier: None,
+            corner_radius: None,
+            border_width: None,
+            border_color: None,
         }
     }
 }
@@ -288,6 +294,37 @@ impl Engine for WryEngine {
         if let Some(zoom) = options.zoom {
             webview.zoom(zoom)?;
         }
+
+        #[cfg(target_os = "macos")]
+        if let Some(radius) = options.corner_radius {
+            use objc2::msg_send;
+            use wry::WebViewExtMacOS;
+            let wk = webview.webview();
+            unsafe {
+                let () = msg_send![&*wk, setWantsLayer: true];
+                let layer: *mut objc2::runtime::AnyObject = msg_send![&*wk, layer];
+                if !layer.is_null() {
+                    let () = msg_send![layer, setCornerRadius: radius];
+                    let () = msg_send![layer, setMasksToBounds: true];
+                    if let Some(width) = options.border_width {
+                        let () = msg_send![layer, setBorderWidth: width];
+                        let rgba = options.border_color.unwrap_or([0.35, 0.5, 0.95, 0.45]);
+                        let color: *mut objc2::runtime::AnyObject = msg_send![
+                            objc2::class!(NSColor),
+                            colorWithRed: rgba[0],
+                            green: rgba[1],
+                            blue: rgba[2],
+                            alpha: rgba[3]
+                        ];
+                        if !color.is_null() {
+                            let cg_color: *mut objc2::runtime::AnyObject = msg_send![color, CGColor];
+                            let () = msg_send![layer, setBorderColor: cg_color];
+                        }
+                    }
+                }
+            }
+        }
+
         self.views.insert(id, webview);
         Ok(id)
     }

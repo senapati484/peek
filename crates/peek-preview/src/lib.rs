@@ -31,7 +31,7 @@ impl Default for PreviewConfig {
             height: 320.0,
             zoom: 0.6,
             gap: 8.0,
-            modifier_only: false,
+            modifier_only: true,
         }
     }
 }
@@ -170,7 +170,10 @@ mod tests {
 
     #[test]
     fn waits_for_hover_delay() {
-        let config = PreviewConfig::default();
+        let config = PreviewConfig {
+            modifier_only: false,
+            ..Default::default()
+        };
         let mut c = PreviewController::default();
         let action = c.hover(
             "https://a".into(),
