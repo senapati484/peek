@@ -79,6 +79,18 @@
   let dragId = $state<number | null>(null);
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
 
+  let sleepingCount = $derived(tabs.filter((t) => t.discarded).length);
+  let liveCount = $derived(tabs.length - sleepingCount);
+  let estimatedMemorySaved = $derived(sleepingCount * 95);
+
+  function hibernateOthers(): void {
+    send({ type: 'discardOtherTabs' });
+  }
+
+  function hibernateTab(id: number): void {
+    send({ type: 'discardTab', id });
+  }
+
   let filteredTabs = $derived(
     filterText.trim()
       ? tabs.filter((t) =>
@@ -346,6 +358,29 @@
       </div>
     </div>
 
+    <!-- Memory Saver Dashboard -->
+    <div class="memory-saver-bar">
+      <div class="mem-stat-info">
+        <span class="mem-icon" aria-hidden="true">☾</span>
+        <span class="mem-text">
+          <strong>{liveCount}</strong> live · <strong>{sleepingCount}</strong> sleeping
+          {#if sleepingCount > 0}
+            <span class="mem-saved">({estimatedMemorySaved}MB saved)</span>
+          {/if}
+        </span>
+      </div>
+      {#if liveCount > 1}
+        <button
+          class="hibernate-btn"
+          title="Hibernate all inactive background tabs to save memory"
+          onclick={hibernateOthers}
+          type="button"
+        >
+          Hibernate Others
+        </button>
+      {/if}
+    </div>
+
     <div class="body tabs-body">
       <ul class="tabs-list">
         {#each filteredTabs as tab, idx (tab.id)}
@@ -382,11 +417,24 @@
                 </span>
               {/if}
               {#if tab.discarded}
-                <span class="pill sleep" title="Tab sleeping to save memory">
-                  zZ
+                <span class="pill sleep" title="Tab sleeping to save memory. Click to wake.">
+                  ☾ Sleeping
                 </span>
               {/if}
             </button>
+            {#if !tab.discarded && tab.id !== activeTabId}
+              <button
+                class="tab-sleep-btn"
+                title="Hibernate tab to free memory"
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  hibernateTab(tab.id);
+                }}
+              >
+                ☾
+              </button>
+            {/if}
             <button
               class="tab-close"
               title="Close tab (Cmd+W)"
@@ -655,12 +703,19 @@
         </div>
 
       {:else if section === 'preview'}
-        <div class="section-title">Hover Preview (Signature Feature)</div>
+        <div class="section-title">Hover Preview & Link QuickLook</div>
         <div class="card settings-card">
+          <div class="field" style="background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">
+            <div>
+              <span class="field-label-bold" style="color: var(--accent);">✦ Space to Peek (Finder QuickLook)</span>
+              <p class="field-desc">Hover over any link and press <kbd style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);">Space</kbd> or hold <kbd style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);">Shift</kbd> to pop open an instant live card preview.</p>
+            </div>
+          </div>
+
           <div class="field switch-field">
             <div>
-              <span class="field-label-bold">Require ⌘ / Ctrl Key</span>
-              <p class="field-desc">Hold ⌘ (macOS) or Ctrl while hovering links</p>
+              <span class="field-label-bold">Require Modifier Key</span>
+              <p class="field-desc">Require ⌘ or Shift key to trigger preview on hover</p>
             </div>
             <label class="switch">
               <input
@@ -867,9 +922,12 @@
           <div class="key-row"><kbd>Alt + ← / →</kbd> <span>Go back / forward in history</span></div>
         </div>
 
-        <div class="section-title" style="margin-top: 16px;">Peek Signatures</div>
+        <div class="section-title" style="margin-top: 16px;">Peek Gestures & Signatures</div>
         <div class="shortcut-list card settings-card">
-          <div class="key-row"><kbd>⌘ + Hover</kbd> <span>Trigger live link preview</span></div>
+          <div class="key-row"><kbd>Space</kbd> <span>QuickLook preview hovered link (Finder style)</span></div>
+          <div class="key-row"><kbd>⇧ / ⌘ + Hover</kbd> <span>Trigger live link preview</span></div>
+          <div class="key-row"><kbd>Swipe Bar ⇄</kbd> <span>2-finger horizontal swipe top bar to switch tabs</span></div>
+          <div class="key-row"><kbd>Edge Swipe ⇥</kbd> <span>Swipe from trackpad left/right edges to open drawers</span></div>
           <div class="key-row"><kbd>⌘ ⇧ [</kbd> <span>Toggle vertical tabs drawer</span></div>
           <div class="key-row"><kbd>⌘ ⇧ ]</kbd> <span>Toggle settings & tools drawer</span></div>
           <div class="key-row"><kbd>Esc</kbd> <span>Dismiss preview or close drawer</span></div>
@@ -1108,6 +1166,55 @@
     padding: 12px;
   }
 
+  /* Memory Saver Bar */
+  .memory-saver-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    user-select: none;
+    min-height: 28px;
+    box-sizing: border-box;
+  }
+
+  .mem-stat-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+  }
+
+  .mem-icon {
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .mem-saved {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .hibernate-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    transition: all 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .hibernate-btn:hover {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
   /* Tabs List */
   .tabs-list {
     list-style: none;
@@ -1206,8 +1313,35 @@
   }
 
   .pill.sleep {
-    background: var(--hover);
+    background: color-mix(in srgb, var(--surface-2) 90%, transparent);
     color: var(--muted);
+    border: 1px solid var(--border-subtle);
+    font-size: 9px;
+  }
+
+  .tab-sleep-btn {
+    all: unset;
+    flex: 0 0 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    margin-right: 2px;
+  }
+
+  .tabs-list li:hover .tab-sleep-btn {
+    opacity: 1;
+  }
+
+  .tab-sleep-btn:hover {
+    background: var(--hover);
+    color: var(--accent);
   }
 
   .tab-close {

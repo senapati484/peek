@@ -28,6 +28,16 @@
 
   let isStartPage = $derived(isBlank(activeUrl));
 
+  let lastBarCycle = 0;
+  function onBarWheel(event: WheelEvent) {
+    if (Math.abs(event.deltaX) > 20 && Math.abs(event.deltaY) < 18) {
+      const now = Date.now();
+      if (now - lastBarCycle < 240) return;
+      lastBarCycle = now;
+      send({ type: 'cycleTab', forward: event.deltaX > 0 });
+    }
+  }
+
   function openBar() {
     focused = true;
     send({ type: 'setOmnibarOpen', open: true });
@@ -475,11 +485,30 @@
           </div>
         {/if}
       </div>
+
+      <!-- Minimalist Keyboard & Gesture Affordances -->
+      <div class="start-hints-row" aria-label="Shortcuts and Gestures">
+        <span class="start-hint-pill">
+          <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
+        </span>
+        <span class="start-hint-dot">•</span>
+        <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
+          <kbd class="start-kbd">Space</kbd> Link Peek
+        </span>
+        <span class="start-hint-dot">•</span>
+        <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
+          <span class="start-hint-icon">⇄</span> Swipe to Switch
+        </span>
+        <span class="start-hint-dot">•</span>
+        <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
+          <span class="start-hint-icon">⇥</span> Edge Drawers
+        </span>
+      </div>
     </div>
   {:else}
     <!-- Docked Minimalist Top Bar -->
     <div class="bar-container">
-      <div class="bar">
+      <div class="bar" onwheel={onBarWheel} title="Swipe horizontally with 2 fingers to cycle tabs">
         <!-- Logo / Tabs Drawer Trigger -->
         <button
           class="logo-btn"
@@ -1019,9 +1048,56 @@
     background: var(--hover);
   }
 
-  .suggest-item.selected,
-  .suggest-item:hover {
-    background: var(--hover);
+  /* Minimalist Keyboard & Gesture Affordances */
+  .start-hints-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    user-select: none;
+    pointer-events: auto;
+  }
+
+  .start-hint-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: -0.01em;
+    padding: 3px 6px;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+  }
+
+  .start-hint-pill:hover {
+    color: var(--text-secondary);
+  }
+
+  .start-kbd {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", inherit;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 4.5px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    line-height: 1.2;
+  }
+
+  .start-hint-dot {
+    font-size: 10px;
+    color: var(--border);
+    user-select: none;
+  }
+
+  .start-hint-icon {
+    font-size: 12px;
+    opacity: 0.8;
   }
 
   /* Docked Top Bar: Clean Full-Width Toolbar */

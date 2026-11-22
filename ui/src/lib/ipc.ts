@@ -69,6 +69,9 @@ export type PeekCommand =
   | { type: 'closeTab'; id: number }
   | { type: 'switchTab'; id: number }
   | { type: 'reorderTab'; id: number; toIndex: number }
+  | { type: 'discardTab'; id: number }
+  | { type: 'discardOtherTabs' }
+  | { type: 'cycleTab'; forward: boolean }
   | { type: 'back' }
   | { type: 'forward' }
   | { type: 'reload' }

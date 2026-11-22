@@ -366,6 +366,21 @@ const PAGE_SCRIPT: &str = r##"
   }, true);
 
   document.addEventListener("keydown", function (ev) {
+    if ((ev.code === "Space" || ev.key === " ") && hoverAnchor && hoverUrl && !hoverTimer) {
+      var t = ev.target;
+      var tag = (t && t.tagName || "").toLowerCase();
+      if (tag !== "input" && tag !== "textarea" && !t.isContentEditable) {
+        ev.preventDefault();
+        var rect = hoverAnchor.getBoundingClientRect();
+        send({
+          type: "hover",
+          url: hoverUrl,
+          forced: true,
+          rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
+        });
+        return;
+      }
+    }
     if (isPreviewMod(ev) && hoverAnchor && hoverUrl && !hoverTimer) {
       var rect = hoverAnchor.getBoundingClientRect();
       send({
@@ -423,5 +438,22 @@ const PAGE_SCRIPT: &str = r##"
   window.addEventListener("mouseleave", function () {
     if (edgeTimer) { clearTimeout(edgeTimer); edgeTimer = null; }
   });
+
+  var lastWheelNav = 0;
+  window.addEventListener("wheel", function (ev) {
+    if (Math.abs(ev.deltaX) > 35 && Math.abs(ev.deltaY) < 25) {
+      var now = Date.now();
+      if (now - lastWheelNav < 700) return;
+      var atLeftEdge = ev.clientX <= EDGE_ZONE + 40;
+      var atRightEdge = (window.innerWidth - ev.clientX) <= EDGE_ZONE + 40;
+      if (atLeftEdge && ev.deltaX < -25) {
+        lastWheelNav = now;
+        send({ type: "edgeProximity", side: "left", distance: 0 });
+      } else if (atRightEdge && ev.deltaX > 25) {
+        lastWheelNav = now;
+        send({ type: "edgeProximity", side: "right", distance: 0 });
+      }
+    }
+  }, { passive: true });
 })();
 "##;

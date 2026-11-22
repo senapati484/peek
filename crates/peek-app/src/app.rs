@@ -139,6 +139,14 @@ impl EngineEvents for ProxyEvents {
     }
 }
 
+fn is_subframe_or_widget_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.contains("ogs.google.com")
+        || lower.contains("/widget/account")
+        || lower.contains("accounts.google.com/widget")
+        || lower.contains("accounts.google.com/gsi/")
+}
+
 pub struct App {
     window: Window,
     engine: WryEngine,
@@ -335,14 +343,26 @@ impl App {
             }
             UserEvent::Url { view, url } => {
                 if let Some(tab) = self.view_tabs.get(&view).copied() {
-                    self.tabs.set_url(tab, &url);
+                    let clean_url = if let Some(top) = self.engine.url(view) {
+                        if !top.is_empty() && !peek_core::url::is_blank(&top) {
+                            top
+                        } else {
+                            url
+                        }
+                    } else {
+                        url
+                    };
+                    if is_subframe_or_widget_url(&clean_url) {
+                        return;
+                    }
+                    self.tabs.set_url(tab, &clean_url);
                     self.send(Event::UrlChanged {
                         id: tab,
-                        url: url.clone(),
+                        url: clean_url.clone(),
                     });
                     self.send_loading(tab);
                     self.push_tabs();
-                    if Some(tab) == self.tabs.active_id() && !peek_core::url::is_blank(&url) {
+                    if Some(tab) == self.tabs.active_id() && !peek_core::url::is_blank(&clean_url) {
                         if let Some(id) = self.ui_id {
                             let _ = self.engine.set_bounds(id, self.chrome_bounds());
                         }
@@ -381,11 +401,20 @@ impl App {
         match event {
             LoadEvent::Started => {
                 self.tabs.set_loading(tab, true);
-                if !url.is_empty() && !peek_core::url::is_blank(&url) {
-                    self.tabs.set_url(tab, &url);
+                let cand_url = if let Some(top) = self.engine.url(view) {
+                    if !top.is_empty() && !peek_core::url::is_blank(&top) {
+                        top
+                    } else {
+                        url
+                    }
+                } else {
+                    url
+                };
+                if !cand_url.is_empty() && !peek_core::url::is_blank(&cand_url) && !is_subframe_or_widget_url(&cand_url) {
+                    self.tabs.set_url(tab, &cand_url);
                     self.send(Event::UrlChanged {
                         id: tab,
-                        url: url.clone(),
+                        url: cand_url.clone(),
                     });
                     if Some(tab) == self.tabs.active_id() {
                         if let Some(id) = self.ui_id {
@@ -402,17 +431,11 @@ impl App {
             }
             LoadEvent::Finished => {
                 self.tabs.set_loading(tab, false);
-                let final_url = if !url.is_empty() && !peek_core::url::is_blank(&url) {
+                let top_url = self.engine.url(view).unwrap_or_default();
+                let final_url = if !top_url.is_empty() && !peek_core::url::is_blank(&top_url) && !is_subframe_or_widget_url(&top_url) {
+                    top_url
+                } else if !url.is_empty() && !peek_core::url::is_blank(&url) && !is_subframe_or_widget_url(&url) {
                     url
-                } else if let Some(live_url) = self.engine.url(view) {
-                    if !live_url.is_empty() && !peek_core::url::is_blank(&live_url) {
-                        live_url
-                    } else {
-                        self.tabs
-                            .tab(tab)
-                            .map(|t| t.url.clone())
-                            .unwrap_or_else(|| peek_core::url::blank_page().to_string())
-                    }
                 } else {
                     self.tabs
                         .tab(tab)
@@ -420,7 +443,7 @@ impl App {
                         .unwrap_or_else(|| peek_core::url::blank_page().to_string())
                 };
 
-                if !final_url.is_empty() && !peek_core::url::is_blank(&final_url) {
+                if !final_url.is_empty() && !peek_core::url::is_blank(&final_url) && !is_subframe_or_widget_url(&final_url) {
                     self.tabs.set_url(tab, &final_url);
                     self.send(Event::UrlChanged {
                         id: tab,
@@ -453,6 +476,19 @@ impl App {
                     let _ = self.engine.set_visible(view, !is_blank);
                     if !is_blank {
                         let _ = self.engine.focus(view);
+                    }
+                }
+
+                // Restore scroll offset if tab was restored from hibernation
+                if let Some(t) = self.tabs.tab(tab) {
+                    if t.scroll_y > 0.0 {
+                        let y = t.scroll_y;
+                        let _ = self.engine.evaluate(
+                            view,
+                            &format!(
+                                "(function(){{ var pos = {y}; setTimeout(function(){{ window.scrollTo(0, pos); }}, 50); setTimeout(function(){{ window.scrollTo(0, pos); }}, 200); }})();"
+                            ),
+                        );
                     }
                 }
 
@@ -503,6 +539,21 @@ impl App {
                     self.push_tabs();
                 }
             }
+            Command::DiscardTab { id } => {
+                let actions = self.tabs.discard(id);
+                self.apply(actions);
+                self.push_tabs();
+            }
+            Command::DiscardOtherTabs => {
+                let actions = self.tabs.discard_others();
+                let count = actions.len();
+                self.apply(actions);
+                self.push_tabs();
+                self.send(Event::Toast {
+                    message: format!("Hibernated {count} inactive tabs to free memory"),
+                });
+            }
+            Command::CycleTab { forward } => self.cycle_tab(forward),
             Command::Back => {
                 if let Some(view) = self.active_view() {
                     let _ = self.engine.go_back(view);
@@ -680,11 +731,16 @@ impl App {
             }
             PageEvent::UrlChanged { url } => {
                 if let Some(tab) = tab {
-                    if !url.is_empty() && !peek_core::url::is_blank(&url) {
-                        self.tabs.set_url(tab, &url);
+                    let clean_url = if is_subframe_or_widget_url(&url) {
+                        String::new()
+                    } else {
+                        url
+                    };
+                    if !clean_url.is_empty() && !peek_core::url::is_blank(&clean_url) {
+                        self.tabs.set_url(tab, &clean_url);
                         self.send(Event::UrlChanged {
                             id: tab,
-                            url: url.clone(),
+                            url: clean_url.clone(),
                         });
                         self.push_tabs();
                     }
@@ -896,6 +952,7 @@ impl App {
                         let should_show = visible && !is_blank;
                         let _ = self.engine.set_visible(view, should_show);
                         if should_show {
+                            let _ = self.engine.set_bounds(view, self.page_bounds());
                             let _ = self.engine.focus(view);
                         }
                     }

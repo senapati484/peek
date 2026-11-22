@@ -301,6 +301,22 @@ impl TabManager {
         vec![TabAction::Destroy { id }]
     }
 
+    /// Discard all inactive background tabs to save memory immediately.
+    pub fn discard_others(&mut self) -> Vec<TabAction> {
+        let active = self.active.unwrap_or(0);
+        let victims: Vec<TabId> = self
+            .tabs
+            .iter()
+            .filter(|t| t.id != active && t.is_discardable())
+            .map(|t| t.id)
+            .collect();
+        let mut actions = Vec::new();
+        for id in victims {
+            actions.extend(self.discard(id));
+        }
+        actions
+    }
+
     /// Discard least-recently-active tabs until the live limit is respected.
     pub fn enforce_live_limit(&mut self) -> Vec<TabAction> {
         let max = self.config.max_live.max(1);
@@ -497,6 +513,22 @@ mod tests {
         m.enforce_live_limit();
         assert_eq!(m.live_count(), 1);
         assert!(m.tab(5).unwrap().live);
+    }
+
+    #[test]
+    fn discard_others_discards_all_inactive_tabs() {
+        let mut m = manager();
+        open(&mut m, 4);
+        assert_eq!(m.live_count(), 4);
+        assert_eq!(m.active_id(), Some(4));
+
+        let actions = m.discard_others();
+        assert_eq!(actions.len(), 3);
+        assert_eq!(m.live_count(), 1);
+        assert!(m.tab(4).unwrap().live);
+        assert!(!m.tab(1).unwrap().live);
+        assert!(!m.tab(2).unwrap().live);
+        assert!(!m.tab(3).unwrap().live);
     }
 
     #[test]

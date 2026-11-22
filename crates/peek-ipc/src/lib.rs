@@ -93,6 +93,12 @@ pub enum Command {
     CloseTab { id: TabId },
     SwitchTab { id: TabId },
     ReorderTab { id: TabId, to_index: usize },
+    /// Discard a background tab webview to save memory immediately.
+    DiscardTab { id: TabId },
+    /// Discard all inactive background tabs to save memory.
+    DiscardOtherTabs,
+    /// Cycle to next (forward: true) or previous (forward: false) tab.
+    CycleTab { forward: bool },
     Back,
     Forward,
     Reload,
