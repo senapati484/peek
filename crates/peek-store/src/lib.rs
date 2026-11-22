@@ -1,6 +1,6 @@
 //! SQLite persistence for Peek.
 //!
-//! One database per profile. See `docs/schema.md` for the schema and the
+//! One database per profile. See `docs/database.md` for the schema and the
 //! reasoning behind each table.
 
 use std::path::Path;

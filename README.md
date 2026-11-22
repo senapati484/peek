@@ -199,6 +199,16 @@ open Peek.app
 
 ---
 
+## Documentation
+
+In-depth technical guides and architectural specifications are available in the [`docs/`](docs/) directory:
+
+- 🏛️ **[System Architecture](docs/architecture.md)** — Multi-child webview layout, subframe isolation, typed IPC engine, LRU memory lifecycle, and native adblocking.
+- 🗄️ **[Database & Storage Engine](docs/database.md)** — SQLite WAL mode, FTS5 prefix search index, sync triggers, table schemas, and profile isolation.
+- ✨ **[Features & Gestures Guide](docs/features.md)** — Space-to-Peek QuickLook, trackpad omnibar swipe tab switching, edge proximity drawers, and memory saver hibernation.
+
+---
+
 ## Contributing
 
 Contributions from the open-source community are welcome! Whether you are fixing bugs, improving the Svelte UI, optimizing Rust webview handlers, or enhancing documentation:
