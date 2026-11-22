@@ -264,6 +264,10 @@ impl App {
         self.create_chrome()?;
 
         let stored = self.store.load_tabs()?;
+        let stored: Vec<peek_store::StoredTab> = stored
+            .into_iter()
+            .filter(|t| !t.url.contains("ogs.google.com") && !t.url.contains("/widget/account"))
+            .collect();
         let session = self.store.load_session()?;
         let active = session.as_ref().and_then(|s| s.active_tab);
         let (manager, actions) = TabManager::restore(
@@ -276,6 +280,8 @@ impl App {
 
         self.layout();
         self.window.set_visible(true);
+        #[cfg(target_os = "macos")]
+        crate::set_app_icon();
         self.spawn_ticker();
         self.push_tabs();
         Ok(())
@@ -328,12 +334,19 @@ impl App {
             UserEvent::Load { view, event, url } => self.on_load(view, event, url),
             UserEvent::Ipc { view, message } => self.on_ipc(view, &message),
             UserEvent::NewWindow { url } => {
-                let url = if url.trim().is_empty() {
+                let trimmed = url.trim();
+                if trimmed.contains("ogs.google.com")
+                    || trimmed.contains("/widget/account")
+                    || trimmed.contains("accounts.google.com/widget")
+                {
+                    return;
+                }
+                let target_url = if trimmed.is_empty() {
                     peek_core::url::blank_page().to_string()
                 } else {
-                    url
+                    trimmed.to_string()
                 };
-                self.new_tab(&url);
+                self.new_tab(&target_url);
             }
             UserEvent::Tick => self.on_tick(),
         }

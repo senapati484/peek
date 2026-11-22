@@ -12,8 +12,34 @@
 
   type Section = 'tabs' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
 
-  let currentSide = $state<EdgeSide>('left');
-  let section = $state<Section>('tabs');
+  function getInitialParams() {
+    const rawHash = window.location.hash.replace('#', '');
+    const queryPart = rawHash.includes('?') ? rawHash.split('?')[1] : '';
+    const params = new URLSearchParams(queryPart);
+    const sideParam = params.get('side')?.toLowerCase();
+    const sectionParam = params.get('section')?.toLowerCase();
+    const validSections: Section[] = [
+      'tabs', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
+    ];
+
+    let resolvedSection: Section = sideParam === 'right' ? 'general' : 'tabs';
+    if (sectionParam) {
+      if (sectionParam === 'settings') {
+        resolvedSection = 'general';
+      } else if (validSections.includes(sectionParam as Section)) {
+        resolvedSection = sectionParam as Section;
+      }
+    }
+
+    return {
+      side: (sideParam === 'right' ? 'right' : 'left') as EdgeSide,
+      section: resolvedSection,
+    };
+  }
+
+  const initialParams = getInitialParams();
+  let currentSide = $state<EdgeSide>(initialParams.side);
+  let section = $state<Section>(initialParams.section);
   let filterText = $state('');
 
   let tabs = $state<TabInfo[]>([]);
@@ -157,7 +183,11 @@
             }
           }
           if (event.section) {
-            section = event.section as Section;
+            if (event.section === 'settings') {
+              section = 'general';
+            } else {
+              section = event.section as Section;
+            }
           }
         }
         break;

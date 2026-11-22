@@ -13,7 +13,6 @@ use tao::window::WindowBuilder;
 use app::{App, UserEvent};
 
 fn main() -> anyhow::Result<()> {
-    set_app_icon();
     let p_dir = profile_dir();
     std::fs::create_dir_all(&p_dir)?;
     let db_path = p_dir.join("peek.db");
@@ -30,6 +29,8 @@ fn main() -> anyhow::Result<()> {
         .with_visible(false)
         .build(&event_loop)
         .context("creating the Peek window")?;
+
+    set_app_icon();
 
     let mut app = App::new(window, proxy, store, p_dir)?;
     app.start()?;
@@ -53,9 +54,9 @@ fn profile_dir() -> PathBuf {
 }
 
 #[cfg(target_os = "macos")]
-fn set_app_icon() {
+pub fn set_app_icon() {
     use objc2::AnyThread;
-    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSImage};
     use objc2_foundation::{MainThreadMarker, NSData};
 
     const ICON_BYTES: &[u8] = include_bytes!("../../../assets/app_icon_1024.png");
@@ -63,12 +64,14 @@ fn set_app_icon() {
     unsafe {
         let mtm = MainThreadMarker::new_unchecked();
         let app = NSApplication::sharedApplication(mtm);
+        let _ = app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         let data = NSData::with_bytes(ICON_BYTES);
         if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
             app.setApplicationIconImage(Some(&image));
+            app.dockTile().display();
         }
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn set_app_icon() {}
+pub fn set_app_icon() {}
