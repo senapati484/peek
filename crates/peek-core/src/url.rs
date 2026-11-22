@@ -100,6 +100,11 @@ pub fn blank_page() -> &'static str {
     "peek://localhost/blank.html"
 }
 
+pub fn is_blank(url: &str) -> bool {
+    let u = url.trim();
+    u.is_empty() || u == "about:blank" || u == blank_page() || u.ends_with("/blank.html")
+}
+
 fn explicit_scheme(input: &str) -> Option<String> {
     let (scheme, _) = input.split_once(':')?;
     if scheme.len() < 2 || scheme.len() > 32 {

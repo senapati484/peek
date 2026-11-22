@@ -34,9 +34,10 @@ export type PeekEvent =
   | { type: 'urlChanged'; id: number; url: string }
   | { type: 'suggestionsReady'; query: string; items: Suggestion[] }
   | { type: 'focusOmnibar' }
-  | { type: 'drawerState'; open: boolean }
+  | { type: 'drawerState'; open: boolean; side?: 'left' | 'right'; section?: string }
   | { type: 'adblockCount'; blocked: number; allowedOnSite: boolean; host: string | null }
   | { type: 'profileChanged'; name: string }
+  | { type: 'profilesList'; profiles: string[]; active: string }
   | { type: 'cookiesCount'; count: number }
   | {
       type: 'settings';
@@ -65,10 +66,13 @@ export type PeekCommand =
   | { type: 'requestState' }
   | { type: 'setOmnibarOpen'; open: boolean }
   | { type: 'focusPage' }
-  | { type: 'setDrawer'; open: boolean }
+  | { type: 'setDrawer'; open: boolean; side?: 'left' | 'right'; section?: string }
   | { type: 'openUrl'; url: string }
   | { type: 'setSiteAdblock'; host: string; enabled: boolean }
   | { type: 'setSetting'; key: string; value: unknown }
+  | { type: 'createProfile'; name: string }
+  | { type: 'switchProfile'; name: string }
+  | { type: 'deleteProfile'; name: string }
   | { type: 'clearCookies' }
   | { type: 'getCookies' }
   | { type: 'quit' };

@@ -217,6 +217,10 @@ const PAGE_SCRIPT: &str = r##"
         return;
       }
     }
+    if (mod && ev.shiftKey && !ev.altKey) {
+      if (key === "[" || key === "{") { ev.preventDefault(); send({ type: "shortcut", shortcut: "openTabsDrawer" }); return; }
+      if (key === "]" || key === "}") { ev.preventDefault(); send({ type: "shortcut", shortcut: "openSettingsDrawer" }); return; }
+    }
     if (mod && key === "tab") {
       ev.preventDefault();
       send({ type: "shortcut", shortcut: ev.shiftKey ? "prevTab" : "nextTab" });
@@ -305,6 +309,11 @@ const PAGE_SCRIPT: &str = r##"
     return true;
   }
 
+  function isPreviewMod(ev) {
+    var isMac = (navigator.platform || "").indexOf("Mac") >= 0;
+    return (isMac ? ev.metaKey : ev.ctrlKey) || ev.shiftKey;
+  }
+
   document.addEventListener("mouseover", function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
     if (!previewable(a) || a === hoverAnchor) return;
@@ -312,7 +321,8 @@ const PAGE_SCRIPT: &str = r##"
     hoverAnchor = a;
     hoverUrl = a.href;
     var rect = a.getBoundingClientRect();
-    var forced = !!ev.shiftKey;
+    var forced = isPreviewMod(ev);
+    var delay = forced ? 80 : HOVER_MS;
     hoverTimer = setTimeout(function () {
       hoverTimer = null;
       if (!hoverAnchor) return;
@@ -322,7 +332,19 @@ const PAGE_SCRIPT: &str = r##"
         forced: forced,
         rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
       });
-    }, forced ? 0 : HOVER_MS);
+    }, delay);
+  }, true);
+
+  document.addEventListener("keydown", function (ev) {
+    if (isPreviewMod(ev) && hoverAnchor && hoverUrl && !hoverTimer) {
+      var rect = hoverAnchor.getBoundingClientRect();
+      send({
+        type: "hover",
+        url: hoverUrl,
+        forced: true,
+        rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
+      });
+    }
   }, true);
 
   document.addEventListener("mouseout", function (ev) {
@@ -340,18 +362,21 @@ const PAGE_SCRIPT: &str = r##"
   var lastEdge = 0;
 
   window.addEventListener("mousemove", function (ev) {
-    var dist = EDGE === "left" ? ev.clientX : (window.innerWidth - ev.clientX);
-    if (dist > EDGE_ZONE) {
+    if (ev.buttons !== 0) return;
+    var atLeft = ev.clientX <= EDGE_ZONE;
+    var atRight = (window.innerWidth - ev.clientX) <= EDGE_ZONE;
+    if (!atLeft && !atRight) {
       if (edgeTimer) { clearTimeout(edgeTimer); edgeTimer = null; }
       return;
     }
     if (edgeTimer) return;
+    var side = atLeft ? "left" : "right";
     edgeTimer = setTimeout(function () {
       edgeTimer = null;
       var now = Date.now();
       if (now - lastEdge < 800) return;
       lastEdge = now;
-      send({ type: "edgeProximity", side: EDGE, distance: 0 });
+      send({ type: "edgeProximity", side: side, distance: 0 });
     }, 150);
   }, { passive: true });
 

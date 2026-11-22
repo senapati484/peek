@@ -107,7 +107,13 @@ pub enum Command {
     /// Return keyboard focus to the page.
     FocusPage,
     /// Open or close the edge drawer.
-    SetDrawer { open: bool },
+    SetDrawer {
+        open: bool,
+        #[serde(default)]
+        side: Option<EdgeSide>,
+        #[serde(default)]
+        section: Option<String>,
+    },
     /// Open a URL in a new tab (drawer / suggestions).
     OpenUrl { url: String },
     /// Per-site ad-block toggle (Phase 2; stored now so the UI is stable).
@@ -121,6 +127,12 @@ pub enum Command {
     ClearCookies,
     /// Request cookie count.
     GetCookies,
+    /// Create a new profile with dedicated storage directory.
+    CreateProfile { name: String },
+    /// Switch to another profile.
+    SwitchProfile { name: String },
+    /// Delete a profile.
+    DeleteProfile { name: String },
     Quit,
 }
 
@@ -158,6 +170,10 @@ pub enum Event {
     FocusOmnibar,
     DrawerState {
         open: bool,
+        #[serde(default)]
+        side: Option<EdgeSide>,
+        #[serde(default)]
+        section: Option<String>,
     },
     AdblockCount {
         blocked: u64,
@@ -166,6 +182,10 @@ pub enum Event {
     },
     ProfileChanged {
         name: String,
+    },
+    ProfilesList {
+        profiles: Vec<String>,
+        active: String,
     },
     Settings {
         max_live: usize,
@@ -281,6 +301,8 @@ pub enum Shortcut {
     Forward,
     Escape,
     ToggleDrawer,
+    OpenTabsDrawer,
+    OpenSettingsDrawer,
     OpenCommandPalette,
 }
 

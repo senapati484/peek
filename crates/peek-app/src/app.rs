@@ -26,7 +26,6 @@ use crate::assets::{PageAssets, UiAssets};
 use crate::inject;
 
 pub const BAR_HEIGHT: f64 = 36.0;
-pub const DRAWER_WIDTH: f64 = 320.0;
 pub const DEFAULT_USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
 const PREVIEW_HIDE_GRACE: Duration = Duration::from_millis(300);
@@ -167,6 +166,8 @@ pub struct App {
     profile_dir: std::path::PathBuf,
     profile_web_data_dir: std::path::PathBuf,
     profile_uuid: [u8; 16],
+    current_drawer_side: EdgeSide,
+    current_profile_name: String,
 }
 
 impl App {
@@ -220,6 +221,7 @@ impl App {
         let profile_web_data_dir = profile_dir.join("web_data");
         let _ = std::fs::create_dir_all(&profile_web_data_dir);
 
+        let current_drawer_side = settings.drawer_side;
         Ok(Self {
             window,
             engine,
@@ -247,6 +249,8 @@ impl App {
             profile_dir,
             profile_web_data_dir,
             profile_uuid,
+            current_drawer_side,
+            current_profile_name: "default".to_string(),
         })
     }
 
@@ -338,6 +342,10 @@ impl App {
         match event {
             LoadEvent::Started => {
                 self.tabs.set_loading(tab, true);
+                if let Some(id) = self.ui_id {
+                    let bounds = self.chrome_bounds();
+                    let _ = self.engine.set_bounds(id, bounds);
+                }
                 self.send_loading(tab);
                 self.push_tabs();
                 self.send_cookies_count();
@@ -354,6 +362,10 @@ impl App {
                     self.apply_cosmetic_filters(view, &tab_url);
                 }
 
+                if let Some(id) = self.ui_id {
+                    let bounds = self.chrome_bounds();
+                    let _ = self.engine.set_bounds(id, bounds);
+                }
                 self.send_loading(tab);
                 self.push_tabs();
                 self.send_cookies_count();
@@ -451,9 +463,10 @@ impl App {
                     let _ = self.engine.focus(view);
                 }
             }
-            Command::SetDrawer { open } => {
+            Command::SetDrawer { open, side, section } => {
                 if open {
-                    self.open_drawer();
+                    let s = side.unwrap_or(self.settings.drawer_side);
+                    self.open_drawer_on_side(s, section.as_deref());
                 } else {
                     self.close_drawer();
                 }
@@ -476,6 +489,9 @@ impl App {
             Command::GetCookies => {
                 self.send_cookies_count();
             }
+            Command::CreateProfile { name } => self.create_profile(&name),
+            Command::SwitchProfile { name } => self.switch_profile(&name),
+            Command::DeleteProfile { name } => self.delete_profile(&name),
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -516,9 +532,11 @@ impl App {
                 self.new_tab(&url);
             }
             PageEvent::EdgeProximity { side, .. } => {
-                if side == self.settings.drawer_side {
-                    self.open_drawer();
-                }
+                let section = match side {
+                    EdgeSide::Left => "tabs",
+                    EdgeSide::Right => "settings",
+                };
+                self.open_drawer_on_side(side, Some(section));
             }
             PageEvent::AudioState { playing } => {
                 if let Some(tab) = tab {
@@ -622,9 +640,11 @@ impl App {
                 if self.drawer_open {
                     self.close_drawer();
                 } else {
-                    self.open_drawer();
+                    self.open_drawer_on_side(self.settings.drawer_side, None);
                 }
             }
+            Shortcut::OpenTabsDrawer => self.open_drawer_on_side(EdgeSide::Left, Some("tabs")),
+            Shortcut::OpenSettingsDrawer => self.open_drawer_on_side(EdgeSide::Right, Some("settings")),
             Shortcut::OpenCommandPalette => self.send(Event::FocusOmnibar),
         }
     }
@@ -773,6 +793,10 @@ impl App {
                 }
             }
         }
+        if let Some(id) = self.ui_id {
+            let bounds = self.chrome_bounds();
+            let _ = self.engine.set_bounds(id, bounds);
+        }
     }
 
     fn create_tab_view(&mut self, id: TabId, url: &str) -> anyhow::Result<()> {
@@ -844,10 +868,18 @@ impl App {
         Ok(())
     }
 
-    fn open_drawer(&mut self) {
+    fn open_drawer_on_side(&mut self, side: EdgeSide, section: Option<&str>) {
+        self.current_drawer_side = side;
         if self.drawer_open {
             if let Some(id) = self.drawer_id {
+                let bounds = self.drawer_bounds_for_side(side);
+                let _ = self.engine.set_bounds(id, bounds);
                 let _ = self.engine.focus(id);
+                self.send(Event::DrawerState {
+                    open: true,
+                    side: Some(side),
+                    section: section.map(str::to_string),
+                });
             }
             return;
         }
@@ -855,13 +887,22 @@ impl App {
         if let Some(id) = self.ui_id {
             let _ = self.engine.set_bounds(id, self.chrome_bounds());
         }
-        let bounds = self.drawer_bounds();
+        let bounds = self.drawer_bounds_for_side(side);
         let script = inject::ui_script(&self.ui_nonce);
+        let section_param = section.unwrap_or(match side {
+            EdgeSide::Left => "tabs",
+            EdgeSide::Right => "settings",
+        });
+        let url = format!(
+            "peek://localhost/index.html#drawer?side={:?}&section={}",
+            side, section_param
+        )
+        .to_lowercase();
         match self.engine.create(
             &self.window,
             WebViewOptions {
                 bounds,
-                url: Some("peek://localhost/index.html#drawer".into()),
+                url: Some(url),
                 assets: Some(Arc::new(UiAssets)),
                 initialization_scripts: vec![script],
                 accept_first_mouse: true,
@@ -872,7 +913,11 @@ impl App {
                 self.drawer_id = Some(id);
                 self.drawer_open = true;
                 let _ = self.engine.focus(id);
-                self.send(Event::DrawerState { open: true });
+                self.send(Event::DrawerState {
+                    open: true,
+                    side: Some(side),
+                    section: Some(section_param.to_string()),
+                });
             }
             Err(error) => eprintln!("peek: failed to open drawer: {error}"),
         }
@@ -884,7 +929,11 @@ impl App {
         }
         if self.drawer_open {
             self.drawer_open = false;
-            self.send(Event::DrawerState { open: false });
+            self.send(Event::DrawerState {
+                open: false,
+                side: Some(self.current_drawer_side),
+                section: None,
+            });
         }
         if let Some(view) = self.active_view() {
             let _ = self.engine.focus(view);
@@ -983,15 +1032,26 @@ impl App {
         self.hide_preview();
     }
 
+    fn is_active_blank(&self) -> bool {
+        self.tabs
+            .active()
+            .map(|t| peek_core::url::is_blank(&t.url))
+            .unwrap_or(true)
+    }
+
     fn chrome_bounds(&self) -> Bounds {
-        let (w, _) = self.window_size;
-        let height = BAR_HEIGHT
-            + if self.omnibar_open {
-                OMNIBAR_PANEL_HEIGHT
-            } else {
-                0.0
-            };
-        Bounds::new(0.0, 0.0, w, height)
+        let (w, h) = self.window_size;
+        if self.is_active_blank() {
+            Bounds::new(0.0, 0.0, w, h)
+        } else {
+            let height = BAR_HEIGHT
+                + if self.omnibar_open {
+                    OMNIBAR_PANEL_HEIGHT
+                } else {
+                    0.0
+                };
+            Bounds::new(0.0, 0.0, w, height)
+        }
     }
 
     fn page_bounds(&self) -> Bounds {
@@ -999,14 +1059,110 @@ impl App {
         Bounds::new(0.0, BAR_HEIGHT, w, (h - BAR_HEIGHT).max(0.0))
     }
 
-    fn drawer_bounds(&self) -> Bounds {
+    fn drawer_bounds_for_side(&self, side: EdgeSide) -> Bounds {
         let (w, h) = self.window_size;
-        let width = DRAWER_WIDTH.min(w);
-        let x = match self.settings.drawer_side {
+        let width = match side {
+            EdgeSide::Left => 280.0f64,
+            EdgeSide::Right => 340.0f64,
+        }
+        .min(w);
+        let x = match side {
             EdgeSide::Left => 0.0,
             EdgeSide::Right => (w - width).max(0.0),
         };
         Bounds::new(x, BAR_HEIGHT, width, (h - BAR_HEIGHT).max(0.0))
+    }
+
+    fn drawer_bounds(&self) -> Bounds {
+        self.drawer_bounds_for_side(self.current_drawer_side)
+    }
+
+    fn profiles_list(&self) -> Vec<String> {
+        let mut profiles = vec!["default".to_string()];
+        if let Some(parent) = self.profile_dir.parent() {
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    if let Ok(file_type) = entry.file_type() {
+                        if file_type.is_dir() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            if name != "default" && !name.starts_with('.') {
+                                profiles.push(name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        profiles.sort();
+        profiles.dedup();
+        profiles
+    }
+
+    fn send_profiles_list(&self) {
+        self.send(Event::ProfilesList {
+            profiles: self.profiles_list(),
+            active: self.current_profile_name.clone(),
+        });
+    }
+
+    fn create_profile(&mut self, name: &str) {
+        let clean = name.trim();
+        if clean.is_empty()
+            || clean.contains('/')
+            || clean.contains('\\')
+            || clean.starts_with('.')
+        {
+            return;
+        }
+        if let Some(parent) = self.profile_dir.parent() {
+            let new_dir = parent.join(clean);
+            let _ = std::fs::create_dir_all(&new_dir);
+            self.send_profiles_list();
+            self.send(Event::Toast {
+                message: format!("Profile '{clean}' created"),
+            });
+        }
+    }
+
+    fn switch_profile(&mut self, name: &str) {
+        let clean = name.trim();
+        if clean.is_empty() || clean == self.current_profile_name {
+            return;
+        }
+        if let Some(parent) = self.profile_dir.parent() {
+            let target_dir = parent.join(clean);
+            if target_dir.exists() {
+                self.current_profile_name = clean.to_string();
+                self.profile_dir = target_dir.clone();
+                self.profile_web_data_dir = target_dir.join("web_data");
+                let _ = std::fs::create_dir_all(&self.profile_web_data_dir);
+                let uuid = derive_profile_uuid(clean);
+                self.profile_uuid = uuid;
+                self.send(Event::ProfileChanged {
+                    name: clean.to_string(),
+                });
+                self.send_profiles_list();
+                self.send_cookies_count();
+                self.send(Event::Toast {
+                    message: format!("Switched to profile '{clean}'"),
+                });
+            }
+        }
+    }
+
+    fn delete_profile(&mut self, name: &str) {
+        let clean = name.trim();
+        if clean.is_empty() || clean == "default" || clean == self.current_profile_name {
+            return;
+        }
+        if let Some(parent) = self.profile_dir.parent() {
+            let target = parent.join(clean);
+            let _ = std::fs::remove_dir_all(target);
+            self.send_profiles_list();
+            self.send(Event::Toast {
+                message: format!("Profile '{clean}' deleted"),
+            });
+        }
     }
 
     fn suggestions(&self, query: &str) -> Vec<Suggestion> {
@@ -1071,10 +1227,13 @@ impl App {
         });
         self.send(Event::DrawerState {
             open: self.drawer_open,
+            side: Some(self.current_drawer_side),
+            section: None,
         });
         self.send_adblock_state();
         self.send_settings();
         self.send_cookies_count();
+        self.send_profiles_list();
     }
 
     fn send_cookies_count(&self) {
