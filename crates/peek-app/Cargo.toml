@@ -31,3 +31,6 @@ url.workspace = true
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSString"] }
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSImage", "NSDockTile", "NSMenu", "NSMenuItem"] }
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winres = "0.1"

@@ -149,18 +149,21 @@ flowchart TD
 
 ### Prerequisites
 
-- **macOS:** macOS 12.0 or newer with Xcode Command Line Tools installed:
-  ```bash
-  xcode-select --install
-  ```
 - **Rust:** Stable Rust 1.80+ installed via [rustup](https://rustup.rs):
   ```bash
   rustup default stable
   ```
-- **Node.js:** Node.js 18+ and npm for building the UI assets:
+- **Node.js:** Node.js 18+ and npm for compiling the UI assets:
   ```bash
   node --version
   ```
+- **Platform Dependencies:**
+  - **macOS:** macOS 12.0 or newer with Xcode Command Line Tools (`xcode-select --install`).
+  - **Linux:** GTK 3 and WebKitGTK development libraries:
+    ```bash
+    sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+    ```
+  - **Windows:** Microsoft Edge WebView2 runtime (pre-installed on Windows 10 & 11) and MSVC C++ Build Tools.
 
 ### Development Setup
 
@@ -188,14 +191,25 @@ flowchart TD
    cargo run -p peek-app
    ```
 
-### Building the Standalone macOS `.app` Bundle
+### Building Release Packages
 
-Peek includes a bundling script that compiles an optimized release binary, generates multi-resolution `AppIcon.icns` assets, and packages a ready-to-run `Peek.app`:
+Peek includes automated packaging scripts for each platform:
 
-```bash
-./scripts/build_app.sh
-open Peek.app
-```
+- **macOS (`Peek.app` & Universal DMG):**
+  ```bash
+  ./scripts/build_app.sh
+  open Peek.app
+  ```
+
+- **Linux (`Peek-linux-x86_64.tar.gz` & `.deb`):**
+  ```bash
+  ./scripts/build_linux.sh
+  ```
+
+- **Windows (`Peek-windows-x86_64.zip`):**
+  ```powershell
+  .\scripts\build_windows.ps1
+  ```
 
 ---
 

@@ -9,11 +9,15 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$ROOT_DIR"
 
-echo "==> 1. Building Svelte UI bundle..."
-(cd ui && npm run build)
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+  echo "==> 1. Building Svelte UI bundle..."
+  (cd ui && npm run build)
 
-echo "==> 2. Compiling Rust release binary..."
-cargo build --release -p peek-app
+  echo "==> 2. Compiling Rust release binary..."
+  cargo build --release -p peek-app
+else
+  echo "==> Skipping UI and Cargo build (SKIP_BUILD=1)"
+fi
 
 echo "==> 3. Generating macOS AppIcon.icns..."
 ICON_SRC="assets/app_icon_1024.png"
