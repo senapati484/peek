@@ -41,6 +41,7 @@
   let currentSide = $state<EdgeSide>(initialParams.side);
   let section = $state<Section>(initialParams.section);
   let filterText = $state('');
+  let animKey = $state(0);
 
   let tabs = $state<TabInfo[]>([]);
   let activeTabId = $state<number | null>(null);
@@ -229,6 +230,7 @@
         if (!event.open) {
           // rust closed
         } else {
+          animKey += 1;
           if (event.side) {
             currentSide = event.side;
             if (event.side === 'left') {
@@ -358,14 +360,15 @@
   });
 </script>
 
-<aside
-  class="drawer"
-  class:left={currentSide === 'left'}
-  class:right={currentSide === 'right'}
-  onmouseenter={cancelClose}
-  onmouseleave={scheduleClose}
-  aria-label="Peek drawer"
->
+{#key animKey}
+  <aside
+    class="drawer"
+    class:left={currentSide === 'left'}
+    class:right={currentSide === 'right'}
+    onmouseenter={cancelClose}
+    onmouseleave={scheduleClose}
+    aria-label="Peek drawer"
+  >
   {#if currentSide === 'left'}
     <!-- Left Drawer: Dedicated Vertical Tabs -->
     <header class="tabs-header">
@@ -1097,6 +1100,7 @@
     </footer>
   {/if}
 </aside>
+{/key}
 
 <style>
   .drawer {
@@ -1105,25 +1109,26 @@
     height: 100vh;
     background: var(--panel);
     box-shadow: var(--shadow-lg);
-    animation: drawerSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: drawerSlide 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
   }
 
   .drawer.left {
     border-inline-end: 1px solid var(--border);
-    --slide-dir: -12px;
+    --slide-dir: -28px;
   }
 
   .drawer.right {
     border-inline-start: 1px solid var(--border);
-    --slide-dir: 12px;
+    --slide-dir: 28px;
   }
 
   @keyframes drawerSlide {
-    from {
-      opacity: 0.85;
-      transform: translateX(var(--slide-dir, 12px));
+    0% {
+      opacity: 0.1;
+      transform: translateX(var(--slide-dir, 28px));
     }
-    to {
+    100% {
       opacity: 1;
       transform: translateX(0);
     }
