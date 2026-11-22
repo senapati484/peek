@@ -977,7 +977,11 @@ impl App {
                 section: None,
             });
         }
-        if let Some(view) = self.active_view() {
+        if self.is_active_blank() {
+            if let Some(id) = self.ui_id {
+                let _ = self.engine.focus(id);
+            }
+        } else if let Some(view) = self.active_view() {
             let _ = self.engine.focus(view);
         }
     }
@@ -1116,15 +1120,15 @@ impl App {
     fn drawer_bounds_for_side(&self, side: EdgeSide) -> Bounds {
         let (w, h) = self.window_size;
         let width = match side {
-            EdgeSide::Left => 280.0f64,
-            EdgeSide::Right => 340.0f64,
+            EdgeSide::Left => 290.0f64,
+            EdgeSide::Right => 360.0f64,
         }
         .min(w);
         let x = match side {
             EdgeSide::Left => 0.0,
             EdgeSide::Right => (w - width).max(0.0),
         };
-        Bounds::new(x, BAR_HEIGHT, width, (h - BAR_HEIGHT).max(0.0))
+        Bounds::new(x, 0.0, width, h)
     }
 
     fn drawer_bounds(&self) -> Bounds {

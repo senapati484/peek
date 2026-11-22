@@ -6,6 +6,7 @@
     onEvent,
     requestState,
     send,
+    type EdgeSide,
     type PeekEvent,
     type Suggestion,
   } from './ipc';
@@ -21,6 +22,7 @@
   let searchEngine = $state('Google');
   let activeProfile = $state('default');
   let profileInitial = $derived((activeProfile[0] || 'D').toUpperCase());
+  let drawerOpen = $state(false);
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
 
@@ -127,6 +129,7 @@
         openBar();
         break;
       case 'drawerState':
+        drawerOpen = event.open;
         if (event.open) closeBar(false);
         break;
       case 'settings':
@@ -223,12 +226,53 @@
       }
     };
     window.addEventListener('keydown', onWindowKey, true);
+
+    let edgeTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastEdge = 0;
+
+    const onWindowMouseMove = (ev: MouseEvent) => {
+      if (!isStartPage || drawerOpen || ev.buttons !== 0) return;
+      const zone = 10;
+      const atLeft = ev.clientX <= zone;
+      const atRight = window.innerWidth - ev.clientX <= zone;
+      if (!atLeft && !atRight) {
+        if (edgeTimer) {
+          clearTimeout(edgeTimer);
+          edgeTimer = null;
+        }
+        return;
+      }
+      if (edgeTimer) return;
+      const side: EdgeSide = atLeft ? 'left' : 'right';
+      const section = atLeft ? 'tabs' : 'settings';
+      edgeTimer = setTimeout(() => {
+        edgeTimer = null;
+        const now = Date.now();
+        if (now - lastEdge < 800) return;
+        lastEdge = now;
+        send({ type: 'setDrawer', open: true, side, section });
+      }, 140);
+    };
+
+    const onWindowMouseLeave = () => {
+      if (edgeTimer) {
+        clearTimeout(edgeTimer);
+        edgeTimer = null;
+      }
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove, { passive: true });
+    window.addEventListener('mouseleave', onWindowMouseLeave);
+
     if (isStartPage) {
       setTimeout(() => inputEl?.focus(), 60);
     }
     return () => {
       window.removeEventListener('keydown', onWindowKey, true);
       window.removeEventListener('storage', syncTheme);
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseleave', onWindowMouseLeave);
+      if (edgeTimer) clearTimeout(edgeTimer);
     };
   });
 </script>
@@ -243,21 +287,23 @@
   {#if isStartPage}
     <!-- Center Start Page Layout: Logo + Search Bar Simple -->
     <div class="start-center">
-      <!-- Profile Badge in Top Corner -->
-      <div class="start-profile-corner">
-        <button
-          class="start-profile-chip"
-          title={`Active Profile: ${activeProfile} (Click to switch)`}
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
-          }}
-        >
-          <span class="profile-avatar-dot">{profileInitial}</span>
-          <span class="profile-chip-name">{activeProfile}</span>
-        </button>
-      </div>
+      {#if !drawerOpen}
+        <!-- Profile Badge in Top Corner -->
+        <div class="start-profile-corner">
+          <button
+            class="start-profile-chip"
+            title={`Active Profile: ${activeProfile} (Click to switch)`}
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
+            }}
+          >
+            <span class="profile-avatar-dot">{profileInitial}</span>
+            <span class="profile-chip-name">{activeProfile}</span>
+          </button>
+        </div>
+      {/if}
 
       <div class="hero-brand">
         <div class="logo-wrapper">

@@ -277,7 +277,11 @@
         <span class="drawer-title">Tabs</span>
         <span class="tab-count-badge">{tabs.length}</span>
       </div>
-      <button class="icon-btn" onclick={close} title="Close drawer (Esc)">✕</button>
+      <button class="icon-close-btn" onclick={close} title="Close tabs (Esc)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="close-icon">
+          <path d="M4 4l8 8M12 4l-8 8" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
     </header>
 
     <div class="filter-wrap">
@@ -373,7 +377,11 @@
           <img src="/logo.png" alt="Peek" class="drawer-logo" />
           <span class="drawer-title">Settings & Tools</span>
         </div>
-        <button class="icon-btn" onclick={close} title="Close drawer (Esc)">✕</button>
+        <button class="icon-close-btn" onclick={close} title="Close drawer (Esc)">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="close-icon">
+            <path d="M4 4l8 8M12 4l-8 8" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
 
       <nav class="settings-nav">
@@ -695,33 +703,54 @@
             <li class="profile-item card" class:active-profile={p === activeProfile}>
               <div class="profile-info">
                 <div class="profile-avatar">{p[0].toUpperCase()}</div>
-                <div>
-                  <div class="profile-name">{p}</div>
-                  {#if p === activeProfile}
-                    <span class="profile-badge">Active</span>
-                  {/if}
+                <div class="profile-meta">
+                  <div class="profile-name-row">
+                    <span class="profile-name">{p}</span>
+                    {#if p === activeProfile}
+                      <span class="profile-badge">Active</span>
+                    {/if}
+                  </div>
+                  <span class="profile-subtext">
+                    {p === activeProfile ? 'Current workspace profile' : 'Isolated browsing profile'}
+                  </span>
                 </div>
               </div>
               <div class="profile-actions">
                 {#if p !== activeProfile}
-                  <button class="action-btn" onclick={() => handleSwitchProfile(p)}>Switch</button>
-                  <button class="danger-icon-btn" onclick={() => handleDeleteProfile(p)} title="Delete profile">✕</button>
+                  <button class="switch-profile-btn" onclick={() => handleSwitchProfile(p)}>
+                    Switch
+                  </button>
+                  <button
+                    class="delete-profile-btn"
+                    onclick={() => handleDeleteProfile(p)}
+                    title="Delete profile"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="action-icon">
+                      <path d="M3 4.5h10M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5M6 7.5v5M10 7.5v5M4.5 4.5l.7 9a1.5 1.5 0 001.5 1.4h4.6a1.5 1.5 0 001.5-1.4l.7-9" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
                 {/if}
               </div>
             </li>
           {/each}
         </ul>
 
-        <div class="card settings-card" style="margin-top: 14px;">
-          <div class="section-title" style="margin-bottom: 6px;">Create New Profile</div>
-          <div class="input-action-row">
+        <div class="card create-profile-card">
+          <div class="create-profile-header">
+            <span class="create-title">Create New Profile</span>
+            <span class="create-desc">Isolated cookies, history, tabs, and storage</span>
+          </div>
+          <div class="create-profile-input-wrap">
             <input
               type="text"
-              placeholder="Profile name (e.g. Work)"
+              placeholder="Profile name (e.g. Work, Research)"
               bind:value={newProfileName}
-              class="text-input"
+              onkeydown={(e) => { if (e.key === 'Enter') handleCreateProfile(); }}
+              class="create-profile-input"
             />
-            <button class="primary-btn" onclick={handleCreateProfile}>Create</button>
+            <button class="create-profile-btn" onclick={handleCreateProfile}>
+              Create
+            </button>
           </div>
         </div>
 
@@ -823,7 +852,16 @@
     </div>
 
     <footer class="settings-footer">
-      <button class="quit-btn" onclick={() => send({ type: 'quit' })}>Quit Peek</button>
+      <div class="footer-meta">
+        <span class="footer-brand">Peek</span>
+        <span class="footer-version">v0.1.0</span>
+      </div>
+      <button class="quit-action-btn" onclick={() => send({ type: 'quit' })}>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="quit-icon">
+          <path d="M8 2v5M4.93 4.93a5 5 0 106.14 0" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        Quit Peek
+      </button>
     </footer>
   {/if}
 </aside>
@@ -909,17 +947,29 @@
     font-weight: 600;
   }
 
-  .icon-btn {
+  .icon-close-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--muted);
-    font-size: 14px;
-    padding: 4px;
-    border-radius: 4px;
-    transition: background 0.12s ease, color 0.12s ease;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
 
-  .icon-btn:hover {
+  .icon-close-btn:hover {
     color: var(--text);
     background: var(--hover);
+    border-color: var(--border);
+  }
+
+  .close-icon {
+    width: 12px;
+    height: 12px;
   }
 
   /* Filter */
@@ -968,29 +1018,42 @@
 
   /* Settings Navigation */
   .settings-nav {
-    display: flex;
-    gap: 3px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 3px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 9px;
   }
 
   .settings-nav button {
-    padding: 4px 8px;
+    padding: 5px 2px;
     border-radius: 6px;
     color: var(--muted);
     font-size: 11px;
     font-weight: 500;
-    transition: background 0.12s ease, color 0.12s ease;
+    text-align: center;
+    transition: all 0.14s ease;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .settings-nav button:hover {
-    background: var(--hover);
     color: var(--text);
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 
   .settings-nav button.on {
-    background: var(--hover);
-    color: var(--accent);
+    background: var(--surface);
+    color: var(--text);
     font-weight: 600;
+    border-color: var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   }
 
   /* Body */
@@ -1381,46 +1444,67 @@
   /* Profiles */
   .profile-list {
     list-style: none;
-    margin: 0 0 10px;
+    margin: 0 0 12px;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
   .profile-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 12px;
+    padding: 11px 13px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: all 0.15s ease;
   }
 
   .profile-item.active-profile {
-    border-color: var(--accent);
-    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent);
   }
 
   .profile-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 11px;
+    min-width: 0;
   }
 
   .profile-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: white;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+    color: #ffffff;
     font-weight: 700;
-    font-size: 12px;
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+
+  .profile-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .profile-name-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
   }
 
   .profile-name {
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text);
   }
@@ -1428,29 +1512,132 @@
   .profile-badge {
     font-size: 9.5px;
     color: var(--accent);
-    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
+  }
+
+  .profile-subtext {
+    font-size: 11px;
+    color: var(--muted);
   }
 
   .profile-actions {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
   }
 
-  .action-btn {
-    padding: 4px 8px;
-    border-radius: 5px;
+  .switch-profile-btn {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .switch-profile-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+
+  .delete-profile-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .delete-profile-btn:hover {
+    color: #ef4444;
+    background: color-mix(in srgb, #ef4444 14%, transparent);
+  }
+
+  .action-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .create-profile-card {
+    padding: 14px;
+    border-radius: 12px;
     background: var(--surface);
     border: 1px solid var(--border);
-    font-size: 11px;
-    font-weight: 500;
+    margin-top: 10px;
   }
 
-  .action-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+  .create-profile-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 10px;
   }
+
+  .create-title {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--text);
+  }
+
+  .create-desc {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  .create-profile-input-wrap {
+    display: flex;
+    gap: 8px;
+  }
+
+  .create-profile-input {
+    flex: 1;
+    padding: 7px 11px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .create-profile-input:focus {
+    border-color: var(--accent);
+  }
+
+  .create-profile-btn {
+    padding: 7px 14px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+
+  .create-profile-btn:hover {
+    filter: brightness(1.1);
+  }
+
 
   .danger-btn {
     padding: 4px 8px;
@@ -1624,18 +1811,58 @@
     color: var(--muted);
   }
 
-  .quit-btn {
-    width: 100%;
-    padding: 7px;
-    border-radius: 7px;
-    background: var(--surface-2);
-    color: #ef4444;
-    font-size: 12px;
-    font-weight: 600;
-    transition: background 0.12s ease;
+  /* Settings Footer */
+  .settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
   }
 
-  .quit-btn:hover {
-    background: color-mix(in srgb, #ef4444 14%, transparent);
+  .footer-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .footer-brand {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .footer-version {
+    font-size: 10.5px;
+    opacity: 0.8;
+  }
+
+  .quit-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .quit-action-btn:hover {
+    color: #ef4444;
+    border-color: color-mix(in srgb, #ef4444 35%, var(--border));
+    background: color-mix(in srgb, #ef4444 10%, transparent);
+  }
+
+  .quit-icon {
+    width: 12px;
+    height: 12px;
   }
 </style>
