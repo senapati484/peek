@@ -108,6 +108,8 @@ export type PeekCommand =
   | { type: 'getPinnedSites' }
   | { type: 'clearCookies' }
   | { type: 'getCookies' }
+  | { type: 'previewLink'; url: string; x: number; y: number; width: number; height: number }
+  | { type: 'hidePreview' }
   | { type: 'quit' };
 
 type Bridge = {

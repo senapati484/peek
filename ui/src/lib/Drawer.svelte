@@ -113,6 +113,15 @@
     keyboardSelectedIndex = -1;
   });
 
+  $effect(() => {
+    if (keyboardSelectedIndex >= 0) {
+      setTimeout(() => {
+        const el = document.querySelector('.tabs-list li.keyboard-selected');
+        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }, 0);
+    }
+  });
+
   let pinnedTabs = $derived(filteredTabs.filter((t) => t.pinned));
   let regularTabs = $derived(filteredTabs.filter((t) => !t.pinned));
 
@@ -326,8 +335,9 @@
         }
         if (key === 'w') {
           event.preventDefault();
-          if (activeTabId != null) {
-            send({ type: 'closeTab', id: activeTabId });
+          const targetId = keyboardSelectedTabId ?? activeTabId;
+          if (targetId != null) {
+            send({ type: 'closeTab', id: targetId });
           }
           return;
         }
@@ -463,9 +473,6 @@
                     Audio
                   </span>
                 {/if}
-                <span class="pill pin-badge" title="Pinned tab (protected from eviction)">
-                  📌
-                </span>
               </button>
               <button
                 class="tab-pin-btn is-pinned"
@@ -501,91 +508,98 @@
         {/if}
       {/if}
 
-      <ul class="tabs-list">
-        {#each regularTabs as tab, idx (tab.id)}
-          <li
-            class:active={tab.id === activeTabId}
-            class:discarded={tab.discarded}
-            class:keyboard-selected={tab.id === keyboardSelectedTabId}
-            draggable="true"
-            ondragstart={(e) => onDragStart(e, tab.id)}
-            ondragover={(e) => e.preventDefault()}
-            ondrop={(e) => onDrop(e, idx)}
-          >
-            <button
-              class="tab-row"
-              onclick={() => switchTo(tab.id)}
-              title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
+      {#if regularTabs.length > 0}
+        <ul class="tabs-list">
+          {#each regularTabs as tab, idx (tab.id)}
+            <li
+              class:active={tab.id === activeTabId}
+              class:discarded={tab.discarded}
+              class:keyboard-selected={tab.id === keyboardSelectedTabId}
+              draggable="true"
+              ondragstart={(e) => onDragStart(e, tab.id)}
+              ondragover={(e) => e.preventDefault()}
+              ondrop={(e) => onDrop(e, idx)}
             >
-              {#if tab.favicon}
-                <img
-                  src={tab.favicon}
-                  alt=""
-                  class="favicon"
-                  onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-              {:else}
-                <span class="favicon-initial">{domainInitial(tab.url)}</span>
-              {/if}
-              <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
-              {#if tab.audible}
-                <span class="pill audio" title="Audible tab">
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
-                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
-                  </svg>
-                  Audio
-                </span>
-              {/if}
-              {#if tab.discarded}
-                <span class="pill sleep" title="Tab sleeping to save memory. Click to wake.">
-                  ☾ Sleeping
-                </span>
-              {/if}
-            </button>
-            <button
-              class="tab-pin-btn"
-              title="Pin tab"
-              type="button"
-              onclick={(e) => {
-                e.stopPropagation();
-                send({ type: 'pinTab', id: tab.id, pinned: true });
-              }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tab-pin-icon">
-                <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
-            {#if !tab.discarded && tab.id !== activeTabId}
               <button
-                class="tab-sleep-btn"
-                title="Hibernate tab to free memory"
+                class="tab-row"
+                onclick={() => switchTo(tab.id)}
+                title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
+              >
+                {#if tab.favicon}
+                  <img
+                    src={tab.favicon}
+                    alt=""
+                    class="favicon"
+                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                {:else}
+                  <span class="favicon-initial">{domainInitial(tab.url)}</span>
+                {/if}
+                <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
+                {#if tab.audible}
+                  <span class="pill audio" title="Audible tab">
+                    <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
+                      <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
+                    </svg>
+                    Audio
+                  </span>
+                {/if}
+                {#if tab.discarded}
+                  <span class="pill sleep" title="Tab sleeping to save memory. Click to wake.">
+                    ☾ Sleeping
+                  </span>
+                {/if}
+              </button>
+              <button
+                class="tab-pin-btn"
+                title="Pin tab"
                 type="button"
                 onclick={(e) => {
                   e.stopPropagation();
-                  hibernateTab(tab.id);
+                  send({ type: 'pinTab', id: tab.id, pinned: true });
                 }}
               >
-                ☾
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tab-pin-icon">
+                  <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </button>
-            {/if}
-            <button
-              class="tab-close"
-              title="Close tab (Cmd+W)"
-              onclick={(e) => {
-                e.stopPropagation();
-                send({ type: 'closeTab', id: tab.id });
-              }}
-            >
-              ×
-            </button>
-          </li>
-        {:else}
-          <li class="empty-state">
-            <span class="empty-icon">🔍</span>
-            <span class="empty-text">No tabs match "{filterText}"</span>
-          </li>
-        {/each}
-      </ul>
+              {#if !tab.discarded && tab.id !== activeTabId}
+                <button
+                  class="tab-sleep-btn"
+                  title="Hibernate tab to free memory"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    hibernateTab(tab.id);
+                  }}
+                >
+                  ☾
+                </button>
+              {/if}
+              <button
+                class="tab-close"
+                title="Close tab (Cmd+W)"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  send({ type: 'closeTab', id: tab.id });
+                }}
+              >
+                ×
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      {#if filteredTabs.length === 0}
+        <div class="empty-state">
+          <span class="empty-icon">🔍</span>
+          <span class="empty-text">No tabs match "{filterText}"</span>
+          <button class="clear-filter-btn" type="button" onclick={() => filterText = ''}>
+            Clear filter (Esc)
+          </button>
+        </div>
+      {/if}
     </div>
 
     <footer class="tabs-footer">
@@ -1492,13 +1506,6 @@
     font-size: 9px;
   }
 
-  .pill.pin-badge {
-    background: transparent;
-    padding: 0 2px;
-    font-size: 11px;
-    opacity: 0.85;
-  }
-
   .tab-pin-btn {
     all: unset;
     flex: 0 0 20px;
@@ -1583,10 +1590,29 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 12px;
+    padding: 32px 16px;
     color: var(--muted);
-    font-size: 12px;
-    gap: 6px;
+    font-size: 13px;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .clear-filter-btn {
+    all: unset;
+    cursor: pointer;
+    background: var(--surface-2);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .clear-filter-btn:hover {
+    background: var(--hover);
+    border-color: var(--accent);
   }
 
   /* Footers */

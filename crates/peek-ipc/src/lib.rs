@@ -161,6 +161,16 @@ pub enum Command {
     PinTab { id: TabId, pinned: bool },
     /// Request the list of pinned websites.
     GetPinnedSites,
+    /// Live hover preview link request from UI (e.g. pinned sites / bookmarks).
+    PreviewLink {
+        url: String,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    },
+    /// Dismiss the link preview.
+    HidePreview,
     Quit,
 }
 
@@ -391,6 +401,24 @@ mod tests {
         let json = envelope.to_json().unwrap();
         let decoded: Command = Envelope::decode(&json, "abc123").unwrap();
         assert_eq!(decoded, command);
+
+        let preview_cmd = Command::PreviewLink {
+            url: "https://github.com".into(),
+            x: 100.0,
+            y: 200.0,
+            width: 80.0,
+            height: 80.0,
+        };
+        let preview_env = Envelope::new("nonce", preview_cmd.clone());
+        let preview_json = preview_env.to_json().unwrap();
+        let decoded_preview: Command = Envelope::decode(&preview_json, "nonce").unwrap();
+        assert_eq!(decoded_preview, preview_cmd);
+
+        let hide_cmd = Command::HidePreview;
+        let hide_env = Envelope::new("nonce", hide_cmd.clone());
+        let hide_json = hide_env.to_json().unwrap();
+        let decoded_hide: Command = Envelope::decode(&hide_json, "nonce").unwrap();
+        assert_eq!(decoded_hide, hide_cmd);
     }
 
     #[test]

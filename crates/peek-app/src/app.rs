@@ -704,6 +704,23 @@ impl App {
             Command::GetPinnedSites => {
                 self.send_pinned_sites();
             }
+            Command::PreviewLink { url, x, y, width, height } => {
+                let (win_w, win_h) = self.window_size;
+                let config = self.settings.preview.clone();
+                let target_w = (config.width as f64).min((win_w - 40.0).max(200.0));
+                let target_h = (config.height as f64).min((win_h - 40.0).max(150.0));
+                let placed_x = (x + width / 2.0 - target_w / 2.0).clamp(20.0, (win_w - target_w - 20.0).max(20.0));
+                let placed_y = if y + height + target_h + 20.0 <= win_h {
+                    y + height + 10.0
+                } else {
+                    (y - target_h - 10.0).max(20.0)
+                };
+                let placed = Bounds::new(placed_x, placed_y, target_w, target_h);
+                self.show_preview(&url, placed, config.zoom);
+            }
+            Command::HidePreview => {
+                self.hide_preview();
+            }
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);

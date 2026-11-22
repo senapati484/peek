@@ -36,6 +36,39 @@
   let newPinUrl = $state('');
   let newPinTitle = $state('');
 
+  // Space-to-Peek on Pinned Websites
+  let hoveredPinUrl = $state<string | null>(null);
+  let hoveredPinEl = $state<HTMLElement | null>(null);
+  let isPreviewingPin = $state(false);
+
+  function triggerPinPreview(url: string, el: HTMLElement) {
+    if (!url || isBlank(url)) return;
+    const rect = el.getBoundingClientRect();
+    send({
+      type: 'previewLink',
+      url,
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+    isPreviewingPin = true;
+  }
+
+  function dismissPinPreview() {
+    if (isPreviewingPin) {
+      send({ type: 'hidePreview' });
+      isPreviewingPin = false;
+    }
+  }
+
+  // Tab Cycling HUD State
+  let showTabCyclingHud = $state(false);
+  let hudTabIndex = $state(1);
+  let hudTabTotal = $state(1);
+  let hudTabTitle = $state('');
+  let hudTimer: ReturnType<typeof setTimeout> | undefined;
+
   let isStartPage = $derived(isBlank(activeUrl));
 
   let isCurrentUrlPinned = $derived(
@@ -124,6 +157,7 @@
   function handleEvent(event: PeekEvent) {
     switch (event.type) {
       case 'tabsChanged': {
+        const prevActiveId = activeId;
         const active = event.tabs.find((tab) => tab.active) ?? null;
         activeId = active ? active.id : null;
         if (active) {
@@ -139,6 +173,16 @@
               inputEl?.focus();
               inputEl?.select();
             }, 30);
+          } else if (prevActiveId !== null && prevActiveId !== active.id) {
+            const idx = event.tabs.findIndex((t) => t.id === active.id) + 1;
+            hudTabIndex = idx > 0 ? idx : 1;
+            hudTabTotal = event.tabs.length;
+            hudTabTitle = active.title || displayUrl(active.url);
+            showTabCyclingHud = true;
+            if (hudTimer) clearTimeout(hudTimer);
+            hudTimer = setTimeout(() => {
+              showTabCyclingHud = false;
+            }, 750);
           }
         }
         break;
@@ -388,13 +432,41 @@
         }
       }
 
-      if (event.key === 'Escape' && !isStartPage && focused) {
-        event.preventDefault();
-        closeBar();
-        return;
+      if (event.key === 'Escape') {
+        if (isPreviewingPin) {
+          event.preventDefault();
+          dismissPinPreview();
+          return;
+        }
+        if (!isStartPage && focused) {
+          event.preventDefault();
+          closeBar();
+          return;
+        }
+      }
+
+      if ((event.key === ' ' || event.key === 'Spacebar') && isStartPage && !event.repeat) {
+        const activeEl = document.activeElement as HTMLElement | null;
+        const isInput = activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA';
+        if (!isInput) {
+          const pinTarget = hoveredPinEl || (activeEl?.closest('.pin-card') as HTMLElement | null);
+          const pinUrl = hoveredPinUrl || pinTarget?.getAttribute('data-preview-url');
+          if (pinTarget && pinUrl) {
+            event.preventDefault();
+            triggerPinPreview(pinUrl, pinTarget);
+            return;
+          }
+        }
       }
     };
     window.addEventListener('keydown', onWindowKey, true);
+
+    const onWindowKeyUp = (event: KeyboardEvent) => {
+      if ((event.key === ' ' || event.key === 'Spacebar') && isPreviewingPin) {
+        dismissPinPreview();
+      }
+    };
+    window.addEventListener('keyup', onWindowKeyUp, true);
 
     let edgeTimer: ReturnType<typeof setTimeout> | null = null;
     let lastEdge = 0;
@@ -438,6 +510,7 @@
     }
     return () => {
       window.removeEventListener('keydown', onWindowKey, true);
+      window.removeEventListener('keyup', onWindowKeyUp, true);
       window.removeEventListener('storage', syncTheme);
       window.removeEventListener('mousemove', onWindowMouseMove);
       window.removeEventListener('mouseleave', onWindowMouseLeave);
@@ -557,7 +630,7 @@
               focused = true;
               send({ type: 'setOmnibarOpen', open: true });
             }}
-            placeholder=""
+            placeholder={`Search ${searchEngine} or enter address...`}
             spellcheck="false"
             autocomplete="off"
             autocapitalize="off"
@@ -614,6 +687,16 @@
                 title={`${site.title || cleanDomain(site.url)}\n${site.url}\n(Space to Peek)`}
                 data-preview-url={site.url}
                 onclick={() => handleOpenPin(site.url)}
+                onmouseenter={(e) => {
+                  hoveredPinUrl = site.url;
+                  hoveredPinEl = e.currentTarget;
+                  if (e.shiftKey) triggerPinPreview(site.url, e.currentTarget);
+                }}
+                onmouseleave={() => {
+                  hoveredPinUrl = null;
+                  hoveredPinEl = null;
+                  dismissPinPreview();
+                }}
               >
                 <div class="pin-icon-box">
                   {#if site.favicon}
@@ -925,6 +1008,13 @@
           {/each}
         </div>
       {/if}
+    </div>
+  {/if}
+
+  {#if showTabCyclingHud && !isStartPage}
+    <div class="tab-hud-toast" role="status" aria-live="polite">
+      <span class="tab-hud-badge">Tab {hudTabIndex} of {hudTabTotal}</span>
+      <span class="tab-hud-title">{hudTabTitle}</span>
     </div>
   {/if}
 </div>
@@ -1325,6 +1415,13 @@
 
   .pin-card:hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .pin-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
     transform: translateY(-2px);
   }
 
@@ -1956,5 +2053,57 @@
     font-size: 11.5px;
     text-align: right;
     margin-left: auto;
+  }
+
+  /* Tab Cycling HUD Pill */
+  .tab-hud-toast {
+    position: fixed;
+    top: 42px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px 3px 5px;
+    background: color-mix(in srgb, var(--surface) 92%, #000);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    pointer-events: none;
+    z-index: 10000;
+    animation: hudSlideDown 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes hudSlideDown {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -6px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+  }
+
+  .tab-hud-badge {
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .tab-hud-title {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>
