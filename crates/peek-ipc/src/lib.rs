@@ -147,6 +147,20 @@ pub enum Command {
     UninstallExtension { id: String },
     /// Request installed extensions list.
     GetExtensions,
+    /// Pin or bookmark a website.
+    PinSite {
+        url: String,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(default)]
+        favicon: Option<String>,
+    },
+    /// Unpin a website.
+    UnpinSite { url: String },
+    /// Pin or unpin a tab.
+    PinTab { id: TabId, pinned: bool },
+    /// Request the list of pinned websites.
+    GetPinnedSites,
     Quit,
 }
 
@@ -219,6 +233,19 @@ pub enum Event {
     ExtensionsList {
         extensions: Vec<ExtensionSummary>,
     },
+    PinnedSitesChanged {
+        sites: Vec<PinnedSite>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedSite {
+    pub id: i64,
+    pub url: String,
+    pub title: String,
+    pub favicon: Option<String>,
+    pub position: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -242,6 +269,8 @@ pub struct TabInfo {
     pub discarded: bool,
     pub loading: bool,
     pub audible: bool,
+    #[serde(default)]
+    pub pinned: bool,
     pub active: bool,
 }
 
@@ -375,6 +404,7 @@ mod tests {
                 discarded: false,
                 loading: false,
                 audible: false,
+                pinned: false,
                 active: true,
             }],
             active: Some(1),

@@ -8,6 +8,7 @@
     send,
     type EdgeSide,
     type PeekEvent,
+    type PinnedSite,
     type Suggestion,
   } from './ipc';
 
@@ -17,6 +18,8 @@
   let selected = $state(-1);
   let activeId = $state<number | null>(null);
   let activeUrl = $state('about:blank');
+  let activeTitle = $state('');
+  let activeFavicon = $state<string | null>(null);
   let insecure = $state(false);
   let loading = $state(false);
   let searchEngine = $state('Google');
@@ -26,7 +29,28 @@
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
 
+  // Pinned Websites State
+  let pinnedSites = $state<PinnedSite[]>([]);
+  let showAddPinModal = $state(false);
+  let newPinUrl = $state('');
+  let newPinTitle = $state('');
+
   let isStartPage = $derived(isBlank(activeUrl));
+
+  let isCurrentUrlPinned = $derived(
+    !isBlank(activeUrl) &&
+      pinnedSites.some((p) => {
+        try {
+          const pHost = new URL(p.url).hostname.replace(/^www\./, '').toLowerCase();
+          const cHost = new URL(activeUrl).hostname.replace(/^www\./, '').toLowerCase();
+          const pPath = new URL(p.url).pathname.replace(/\/$/, '');
+          const cPath = new URL(activeUrl).pathname.replace(/\/$/, '');
+          return pHost === cHost && pPath === cPath;
+        } catch {
+          return p.url === activeUrl;
+        }
+      })
+  );
 
   let lastBarCycle = 0;
   function onBarWheel(event: WheelEvent) {
@@ -103,6 +127,8 @@
         activeId = active ? active.id : null;
         if (active) {
           activeUrl = active.url;
+          activeTitle = active.title;
+          activeFavicon = active.favicon;
           insecure = active.url.startsWith('http://');
           if (!focused) {
             input = isBlank(active.url) ? '' : displayUrl(active.url);
@@ -110,6 +136,14 @@
         }
         break;
       }
+      case 'titleChanged':
+        if (event.id === activeId) {
+          activeTitle = event.title;
+        }
+        break;
+      case 'pinnedSitesChanged':
+        pinnedSites = event.sites;
+        break;
       case 'loading':
         if (event.id === activeId) {
           loading = event.loading;
@@ -150,6 +184,61 @@
         break;
       default:
         break;
+    }
+  }
+
+  function togglePinCurrent() {
+    if (isBlank(activeUrl)) return;
+    if (isCurrentUrlPinned) {
+      send({ type: 'unpinSite', url: activeUrl });
+    } else {
+      send({
+        type: 'pinSite',
+        url: activeUrl,
+        title: activeTitle || displayUrl(activeUrl),
+        favicon: activeFavicon || null,
+      });
+    }
+  }
+
+  function handleOpenPin(url: string) {
+    send({ type: 'navigate', input: url });
+  }
+
+  function handleUnpin(url: string, e: MouseEvent) {
+    e.stopPropagation();
+    send({ type: 'unpinSite', url });
+  }
+
+  function handleAddPinSubmit() {
+    const raw = newPinUrl.trim();
+    if (!raw) return;
+    const url = raw.includes('://') ? raw : `https://${raw}`;
+    send({
+      type: 'pinSite',
+      url,
+      title: newPinTitle.trim() || undefined,
+    });
+    newPinUrl = '';
+    newPinTitle = '';
+    showAddPinModal = false;
+  }
+
+  function domainInitial(url: string): string {
+    if (!url || isBlank(url)) return '✦';
+    try {
+      const h = new URL(url).hostname.replace(/^www\./, '');
+      return (h[0] || '✦').toUpperCase();
+    } catch {
+      return '✦';
+    }
+  }
+
+  function cleanDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return url.replace(/^https?:\/\//, '').replace(/^www\./, '');
     }
   }
 
@@ -215,6 +304,7 @@
   onMount(() => {
     onEvent(handleEvent);
     requestState();
+    send({ type: 'getPinnedSites' });
 
     const syncTheme = () => {
       const savedTheme = localStorage.getItem('peek_theme');
@@ -490,6 +580,108 @@
         {/if}
       </div>
 
+      <!-- Pinned Websites Speed Dial Grid -->
+      <div class="pinned-section">
+        <div class="pinned-grid">
+          {#each pinnedSites as site (site.id)}
+            <div class="pin-card-wrap">
+              <button
+                class="pin-card"
+                type="button"
+                title={`${site.title || cleanDomain(site.url)}\n${site.url}\n(Space to Peek)`}
+                data-preview-url={site.url}
+                onclick={() => handleOpenPin(site.url)}
+              >
+                <div class="pin-icon-box">
+                  {#if site.favicon}
+                    <img
+                      src={site.favicon}
+                      alt=""
+                      class="pin-favicon"
+                      onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                    />
+                  {:else}
+                    <span class="pin-initial">{domainInitial(site.url)}</span>
+                  {/if}
+                </div>
+                <span class="pin-title">{site.title || cleanDomain(site.url)}</span>
+              </button>
+              <button
+                class="pin-remove-btn"
+                type="button"
+                title={`Unpin ${site.title || site.url}`}
+                onclick={(e) => handleUnpin(site.url, e)}
+                aria-label={`Unpin ${site.title || site.url}`}
+              >
+                ×
+              </button>
+            </div>
+          {/each}
+
+          <!-- Add Pin Button -->
+          <button
+            class="pin-card add-pin-card"
+            type="button"
+            title="Pin a website"
+            onclick={() => { showAddPinModal = true; }}
+          >
+            <div class="pin-icon-box add-box">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="add-icon">
+                <path d="M8 3.5v9M3.5 8h9" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="pin-title">Add Pin</span>
+          </button>
+        </div>
+      </div>
+
+      {#if showAddPinModal}
+        <div
+          class="pin-modal-backdrop"
+          onclick={(e) => { if (e.target === e.currentTarget) showAddPinModal = false; }}
+          role="presentation"
+        >
+          <div
+            class="pin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            tabindex="-1"
+            onkeydown={(e) => { if (e.key === 'Escape') showAddPinModal = false; }}
+          >
+            <div class="modal-header">
+              <h3 id="modal-title" class="modal-title">Pin Website</h3>
+              <button class="modal-close-btn" type="button" onclick={() => { showAddPinModal = false; }}>×</button>
+            </div>
+            <form onsubmit={(e) => { e.preventDefault(); handleAddPinSubmit(); }} class="modal-form">
+              <label class="modal-label">
+                <span>Website URL</span>
+                <input
+                  type="text"
+                  placeholder="https://example.com"
+                  bind:value={newPinUrl}
+                  class="modal-input"
+                  required
+                />
+              </label>
+              <label class="modal-label">
+                <span>Display Name (optional)</span>
+                <input
+                  type="text"
+                  placeholder="Example"
+                  bind:value={newPinTitle}
+                  class="modal-input"
+                />
+              </label>
+              <div class="modal-actions">
+                <button type="button" class="btn secondary" onclick={() => { showAddPinModal = false; }}>Cancel</button>
+                <button type="submit" class="btn primary">Pin Website</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {/if}
+
       <!-- Minimalist Keyboard & Gesture Affordances -->
       <div class="start-hints-row" aria-label="Shortcuts and Gestures">
         <span class="start-hint-pill">
@@ -621,6 +813,22 @@
             ×
           </button>
         {/if}
+
+        <!-- Pin Website Button -->
+        <button
+          class="tool-btn pin-btn"
+          class:pinned={isCurrentUrlPinned}
+          title={isCurrentUrlPinned ? "Unpin Website" : "Pin Website"}
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            togglePinCurrent();
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill={isCurrentUrlPinned ? "currentColor" : "none"} stroke="currentColor" class="tool-icon pin-icon">
+            <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
 
         <!-- Shield / Privacy Button -->
         <button
@@ -1052,6 +1260,280 @@
     background: var(--hover);
   }
 
+  /* Pinned Websites Speed Dial Section */
+  .pinned-section {
+    width: 100%;
+    max-width: min(620px, calc(100vw - 48px));
+    margin-top: 24px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: center;
+    user-select: none;
+    animation: fadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .pinned-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 12px 8px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pin-card-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pin-card {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    cursor: pointer;
+    padding: 8px 4px 6px;
+    border-radius: 12px;
+    transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease;
+  }
+
+  .pin-card:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .pin-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .pin-card:hover .pin-icon-box {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 0 0 1px var(--accent-glow);
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    transform: scale(1.05);
+  }
+
+  .pin-favicon {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: contain;
+  }
+
+  .pin-initial {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .pin-title {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    max-width: 80px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    letter-spacing: -0.01em;
+    transition: color 0.14s ease;
+  }
+
+  .pin-card:hover .pin-title {
+    color: var(--text);
+  }
+
+  .pin-remove-btn {
+    all: unset;
+    position: absolute;
+    top: 2px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--panel) 90%, black);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: all 0.15s ease;
+    z-index: 5;
+  }
+
+  .pin-card-wrap:hover .pin-remove-btn {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .pin-remove-btn:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+  }
+
+  .add-pin-card:hover .add-box {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  .add-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    transition: color 0.15s ease;
+  }
+
+  .add-pin-card:hover .add-icon {
+    color: var(--accent);
+  }
+
+  /* Add Pin Modal */
+  .pin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.16s ease;
+  }
+
+  .pin-modal {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    padding: 20px 22px;
+    animation: dropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .modal-close-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 2px 6px;
+    transition: color 0.12s ease;
+  }
+
+  .modal-close-btn:hover {
+    color: var(--text);
+  }
+
+  .modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .modal-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .modal-input {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  }
+
+  .modal-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+
+  .modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .modal-actions .btn {
+    all: unset;
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 550;
+    transition: all 0.14s ease;
+  }
+
+  .modal-actions .btn.secondary {
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  .modal-actions .btn.secondary:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .modal-actions .btn.primary {
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--accent-glow);
+  }
+
+  .modal-actions .btn.primary:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
   /* Minimalist Keyboard & Gesture Affordances */
   .start-hints-row {
     display: flex;
@@ -1265,12 +1747,32 @@
     color: var(--muted);
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
   }
 
   .tool-btn:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  .pin-btn.pinned {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .pin-btn.pinned:hover {
+    color: var(--accent);
+    filter: brightness(1.15);
+  }
+
+  .pin-icon {
+    width: 13px;
+    height: 13px;
+    transition: transform 0.14s ease;
+  }
+
+  .pin-btn:hover .pin-icon {
+    transform: scale(1.1);
   }
 
   .profile-btn {

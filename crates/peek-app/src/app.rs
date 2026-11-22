@@ -302,8 +302,10 @@ impl App {
         self.window.set_visible(true);
         #[cfg(target_os = "macos")]
         crate::set_app_icon();
+        let _ = self.store.seed_default_bookmarks(now_ms());
         self.spawn_ticker();
         self.push_tabs();
+        self.send_pinned_sites();
         Ok(())
     }
 
@@ -484,6 +486,12 @@ impl App {
 
                 // Restore scroll offset if tab was restored from hibernation
                 if let Some(t) = self.tabs.tab(tab) {
+                    if let Some(ref fav) = t.favicon {
+                        if let Ok(true) = self.store.is_bookmarked(&final_url) {
+                            let _ = self.store.update_bookmark_favicon(&final_url, fav);
+                            self.send_pinned_sites();
+                        }
+                    }
                     if t.scroll_y > 0.0 {
                         let y = t.scroll_y;
                         let _ = self.engine.evaluate(
@@ -640,6 +648,39 @@ impl App {
             Command::ToggleExtension { id, enabled } => self.toggle_extension(&id, enabled),
             Command::UninstallExtension { id } => self.uninstall_extension(&id),
             Command::GetExtensions => self.send_extensions_list(),
+            Command::PinSite { url, title, favicon } => {
+                let clean_url = url.trim();
+                if !clean_url.is_empty() && !peek_core::url::is_blank(clean_url) {
+                    let t = title.unwrap_or_default();
+                    let _ = self.store.add_bookmark(clean_url, &t, favicon.as_deref(), now_ms());
+                    self.send_pinned_sites();
+                    self.send(Event::Toast {
+                        message: format!("Pinned {}", if t.is_empty() { clean_url } else { &t }),
+                    });
+                }
+            }
+            Command::UnpinSite { url } => {
+                let clean_url = url.trim();
+                if let Ok(removed) = self.store.remove_bookmark_by_url(clean_url) {
+                    if removed > 0 {
+                        self.send_pinned_sites();
+                        self.send(Event::Toast {
+                            message: "Removed pin".into(),
+                        });
+                    }
+                }
+            }
+            Command::PinTab { id, pinned } => {
+                if self.tabs.pin_tab(id, pinned) {
+                    self.push_tabs();
+                    self.send(Event::Toast {
+                        message: if pinned { "Tab pinned".into() } else { "Tab unpinned".into() },
+                    });
+                }
+            }
+            Command::GetPinnedSites => {
+                self.send_pinned_sites();
+            }
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -716,7 +757,13 @@ impl App {
             PageEvent::Shortcut { shortcut } => self.handle_shortcut(shortcut),
             PageEvent::Favicon { href } => {
                 if let Some(tab) = tab {
-                    self.tabs.set_favicon(tab, Some(href));
+                    self.tabs.set_favicon(tab, Some(href.clone()));
+                    if let Some(t) = self.tabs.tab(tab) {
+                        if let Ok(true) = self.store.is_bookmarked(&t.url) {
+                            let _ = self.store.update_bookmark_favicon(&t.url, &href);
+                            self.send_pinned_sites();
+                        }
+                    }
                     self.push_tabs();
                 }
             }
@@ -1528,6 +1575,24 @@ impl App {
         self.send_cookies_count();
         self.send_profiles_list();
         self.send_extensions_list();
+        self.send_pinned_sites();
+    }
+
+    fn send_pinned_sites(&self) {
+        let sites: Vec<peek_ipc::PinnedSite> = self
+            .store
+            .bookmarks()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|b| peek_ipc::PinnedSite {
+                id: b.id,
+                url: b.url,
+                title: b.title,
+                favicon: b.favicon,
+                position: b.position,
+            })
+            .collect();
+        self.send(Event::PinnedSitesChanged { sites });
     }
 
     fn send_cookies_count(&self) {

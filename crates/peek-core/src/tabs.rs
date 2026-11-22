@@ -26,6 +26,7 @@ pub struct Tab {
     pub loading: bool,
     pub audible: bool,
     pub form_dirty: bool,
+    pub pinned: bool,
     /// Whether a webview currently exists for this tab.
     pub live: bool,
 }
@@ -42,12 +43,13 @@ impl Tab {
             loading: false,
             audible: false,
             form_dirty: false,
+            pinned: false,
             live: true,
         }
     }
 
     pub fn is_discardable(&self) -> bool {
-        self.live && !self.audible && !self.form_dirty && !self.loading
+        self.live && !self.pinned && !self.audible && !self.form_dirty && !self.loading
     }
 
     pub fn to_info(&self, active: Option<TabId>) -> TabInfo {
@@ -63,6 +65,7 @@ impl Tab {
             discarded: !self.live,
             loading: self.loading,
             audible: self.audible,
+            pinned: self.pinned,
             active: active == Some(self.id),
         }
     }
@@ -76,6 +79,7 @@ impl Tab {
             scroll_y: self.scroll_y,
             position,
             last_active: self.last_active,
+            pinned: self.pinned,
         }
     }
 }
@@ -149,6 +153,7 @@ impl TabManager {
                 loading: false,
                 audible: false,
                 form_dirty: false,
+                pinned: stored.pinned,
                 live: false,
             });
         }
@@ -417,6 +422,15 @@ impl TabManager {
         }
     }
 
+    pub fn pin_tab(&mut self, id: TabId, pinned: bool) -> bool {
+        if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+            tab.pinned = pinned;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Mark a tab as live after the app successfully created its webview.
     pub fn mark_live(&mut self, id: TabId) {
         if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
@@ -513,6 +527,30 @@ mod tests {
         m.enforce_live_limit();
         assert_eq!(m.live_count(), 1);
         assert!(m.tab(5).unwrap().live);
+    }
+
+    #[test]
+    fn pin_tab_protects_from_discard() {
+        let mut config = TabConfig::default();
+        config.max_live = 1;
+        let mut m = TabManager::new(config);
+        open(&mut m, 3);
+        assert!(!m.tab(1).unwrap().live);
+        assert!(!m.tab(2).unwrap().live);
+        assert!(m.tab(3).unwrap().live);
+
+        // Pin tab 1 and reactivate it
+        m.pin_tab(1, true);
+        assert!(m.tab(1).unwrap().pinned);
+        m.activate(1);
+        // Both tab 1 (active) and any pinned tab will resist discard when possible
+        assert!(m.tab(1).unwrap().live);
+
+        // Now activate tab 3. Since tab 1 is pinned, tab 1 is not discardable!
+        m.activate(3);
+        assert!(m.tab(3).unwrap().live);
+        assert!(m.tab(1).unwrap().live); // Tab 1 stays live because pinned tabs are not discardable
+        assert_eq!(m.live_count(), 2);
     }
 
     #[test]

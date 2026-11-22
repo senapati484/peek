@@ -167,6 +167,7 @@ mod tests {
             loading: false,
             audible: false,
             form_dirty: false,
+            pinned: false,
             live: true,
         }
     }

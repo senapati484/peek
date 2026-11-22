@@ -45,7 +45,7 @@ PRAGMA cache_size = -2000;  -- 2 MB memory cache
 
 ---
 
-## 3. Database Schema (Version 2)
+## 3. Database Schema (Version 3)
 
 ```mermaid
 erDiagram
@@ -65,6 +65,7 @@ erDiagram
         REAL scroll_y
         INTEGER position
         INTEGER last_active
+        INTEGER pinned
     }
     SESSIONS {
         INTEGER id PK
@@ -76,6 +77,7 @@ erDiagram
         INTEGER id PK
         TEXT url UK
         TEXT title
+        TEXT favicon
         INTEGER created_at
         INTEGER position
     }
@@ -167,7 +169,8 @@ CREATE TABLE tabs (
     favicon TEXT,
     scroll_y REAL NOT NULL DEFAULT 0.0,
     position INTEGER NOT NULL,
-    last_active INTEGER NOT NULL
+    last_active INTEGER NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_tabs_position ON tabs(position ASC);
@@ -175,6 +178,7 @@ CREATE INDEX idx_tabs_position ON tabs(position ASC);
 
 - `scroll_y`: The vertical scroll offset captured before the tab was discarded or closed, restored on wake.
 - `position`: Visual tab order preserved across restarts.
+- `pinned`: Whether the tab is pinned (protected from LRU eviction and memory hibernation).
 
 ---
 
@@ -193,13 +197,14 @@ CREATE TABLE sessions (
 ---
 
 ### 4.5 `bookmarks`
-Saved URLs with position ordering.
+Saved and pinned URLs with position ordering and favicon URLs.
 
 ```sql
 CREATE TABLE bookmarks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL DEFAULT '',
+    favicon TEXT,
     created_at INTEGER NOT NULL,
     position INTEGER NOT NULL DEFAULT 0
 );
@@ -269,14 +274,15 @@ CREATE INDEX cookies_domain_idx ON cookies(domain);
 
 Database versioning is tracked via SQLite's internal `user_version` PRAGMA:
 
-- `PRAGMA user_version = 0`: New database; executes initial schema setup.
-- `PRAGMA user_version = 1`: Adds `cookies` table and indexes.
-- `PRAGMA user_version = 2`: Normalizes `scroll_y` and tab layout positions.
+- `PRAGMA user_version = 0`: New database; executes initial schema setup (`MIGRATION_V1`).
+- `PRAGMA user_version = 1`: Adds `cookies` table and indexes (`MIGRATION_V2`).
+- `PRAGMA user_version = 2`: Adds `favicon` to `bookmarks` and `pinned` to `tabs` (`MIGRATION_V3`).
+- `PRAGMA user_version = 3`: Current active schema version.
 
 All schema migrations run inside an atomic transaction:
 ```sql
 BEGIN IMMEDIATE;
 -- Migration statements
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 COMMIT;
 ```

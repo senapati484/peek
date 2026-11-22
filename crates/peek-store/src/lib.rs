@@ -9,7 +9,7 @@ use peek_ipc::TabId;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -40,13 +40,17 @@ pub struct StoredTab {
     pub scroll_y: f64,
     pub position: i64,
     pub last_active: i64,
+    #[serde(default)]
+    pub pinned: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Bookmark {
     pub id: i64,
     pub url: String,
     pub title: String,
+    pub favicon: Option<String>,
     pub created_at: i64,
     pub position: i64,
 }
@@ -113,6 +117,9 @@ impl Store {
         }
         if version < 2 {
             self.conn.execute_batch(MIGRATION_V2)?;
+        }
+        if version < 3 {
+            self.conn.execute_batch(MIGRATION_V3)?;
         }
         self.conn
             .pragma_update(None, "user_version", SCHEMA_VERSION)?;
@@ -193,8 +200,8 @@ impl Store {
         tx.execute("DELETE FROM tabs", [])?;
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO tabs (id, url, title, favicon, scroll_y, position, last_active)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO tabs (id, url, title, favicon, scroll_y, position, last_active, pinned)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
             for tab in tabs {
                 stmt.execute(params![
@@ -204,7 +211,8 @@ impl Store {
                     tab.favicon,
                     tab.scroll_y,
                     tab.position,
-                    tab.last_active
+                    tab.last_active,
+                    if tab.pinned { 1i64 } else { 0i64 }
                 ])?;
             }
         }
@@ -214,7 +222,7 @@ impl Store {
 
     pub fn load_tabs(&self) -> Result<Vec<StoredTab>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, url, title, favicon, scroll_y, position, last_active
+            "SELECT id, url, title, favicon, scroll_y, position, last_active, pinned
              FROM tabs ORDER BY position ASC",
         )?;
         let rows = stmt.query_map([], |row| {
@@ -226,6 +234,7 @@ impl Store {
                 scroll_y: row.get(4)?,
                 position: row.get(5)?,
                 last_active: row.get(6)?,
+                pinned: row.get::<_, i64>(7).map(|p| p != 0).unwrap_or(false),
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -267,15 +276,37 @@ impl Store {
 
     // -- bookmarks -------------------------------------------------------
 
-    pub fn add_bookmark(&self, url: &str, title: &str, now: i64) -> Result<i64> {
+    pub fn add_bookmark(
+        &self,
+        url: &str,
+        title: &str,
+        favicon: Option<&str>,
+        now: i64,
+    ) -> Result<i64> {
+        if let Some(existing_id) = self
+            .conn
+            .query_row(
+                "SELECT id FROM bookmarks WHERE url = ?1",
+                params![url],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+        {
+            self.conn.execute(
+                "UPDATE bookmarks SET title = CASE WHEN ?1 <> '' THEN ?1 ELSE title END, favicon = COALESCE(?2, favicon) WHERE id = ?3",
+                params![title, favicon, existing_id],
+            )?;
+            return Ok(existing_id);
+        }
+
         let position: i64 = self.conn.query_row(
             "SELECT COALESCE(MAX(position), -1) + 1 FROM bookmarks",
             [],
             |row| row.get(0),
         )?;
         self.conn.execute(
-            "INSERT INTO bookmarks (url, title, created_at, position) VALUES (?1, ?2, ?3, ?4)",
-            params![url, title, now, position],
+            "INSERT INTO bookmarks (url, title, favicon, created_at, position) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![url, title, favicon, now, position],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -286,17 +317,41 @@ impl Store {
             .execute("DELETE FROM bookmarks WHERE id = ?1", params![id])?)
     }
 
+    pub fn remove_bookmark_by_url(&self, url: &str) -> Result<usize> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM bookmarks WHERE url = ?1", params![url])?)
+    }
+
+    pub fn is_bookmarked(&self, url: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM bookmarks WHERE url = ?1",
+            params![url],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn update_bookmark_favicon(&self, url: &str, favicon: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET favicon = ?1 WHERE url = ?2",
+            params![favicon, url],
+        )?;
+        Ok(())
+    }
+
     pub fn bookmarks(&self) -> Result<Vec<Bookmark>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, url, title, created_at, position FROM bookmarks ORDER BY position ASC",
+            "SELECT id, url, title, favicon, created_at, position FROM bookmarks ORDER BY position ASC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(Bookmark {
                 id: row.get(0)?,
                 url: row.get(1)?,
                 title: row.get(2)?,
-                created_at: row.get(3)?,
-                position: row.get(4)?,
+                favicon: row.get(3)?,
+                created_at: row.get(4)?,
+                position: row.get(5)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -305,7 +360,7 @@ impl Store {
     pub fn search_bookmarks(&self, query: &str, limit: usize) -> Result<Vec<Bookmark>> {
         let like = format!("%{}%", escape_like(query));
         let mut stmt = self.conn.prepare(
-            "SELECT id, url, title, created_at, position FROM bookmarks
+            "SELECT id, url, title, favicon, created_at, position FROM bookmarks
              WHERE title LIKE ?1 ESCAPE '\\' OR url LIKE ?1 ESCAPE '\\'
              ORDER BY position ASC LIMIT ?2",
         )?;
@@ -314,11 +369,31 @@ impl Store {
                 id: row.get(0)?,
                 url: row.get(1)?,
                 title: row.get(2)?,
-                created_at: row.get(3)?,
-                position: row.get(4)?,
+                favicon: row.get(3)?,
+                created_at: row.get(4)?,
+                position: row.get(5)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn seed_default_bookmarks(&self, now: i64) -> Result<()> {
+        let count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM bookmarks", [], |row| row.get(0))?;
+        if count == 0 {
+            let defaults = [
+                ("https://github.com", "GitHub", Some("https://github.githubassets.com/favicons/favicon.svg")),
+                ("https://duckduckgo.com", "DuckDuckGo", Some("https://duckduckgo.com/favicon.ico")),
+                ("https://www.google.com", "Google", Some("https://www.google.com/favicon.ico")),
+                ("https://wikipedia.org", "Wikipedia", Some("https://wikipedia.org/static/favicon/wikipedia.ico")),
+                ("https://www.rust-lang.org", "Rust", Some("https://www.rust-lang.org/static/images/favicon.svg")),
+            ];
+            for (url, title, fav) in defaults {
+                self.add_bookmark(url, title, fav, now)?;
+            }
+        }
+        Ok(())
     }
 
     // -- settings --------------------------------------------------------
@@ -607,6 +682,11 @@ CREATE TABLE IF NOT EXISTS cookies (
 CREATE INDEX IF NOT EXISTS cookies_domain_idx ON cookies (domain);
 "#;
 
+const MIGRATION_V3: &str = r#"
+ALTER TABLE bookmarks ADD COLUMN favicon TEXT;
+ALTER TABLE tabs ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -749,6 +829,7 @@ mod tests {
                 scroll_y: 10.5,
                 position: 1,
                 last_active: 20,
+                pinned: true,
             },
             StoredTab {
                 id: 1,
@@ -758,6 +839,7 @@ mod tests {
                 scroll_y: 0.0,
                 position: 0,
                 last_active: 10,
+                pinned: false,
             },
         ];
         store.save_tabs(&tabs).unwrap();
@@ -784,13 +866,22 @@ mod tests {
     #[test]
     fn bookmarks_crud_and_search() {
         let store = store();
-        let a = store.add_bookmark("https://a.test", "Alpha", 1).unwrap();
-        store.add_bookmark("https://b.test", "Beta", 2).unwrap();
+        let a = store.add_bookmark("https://a.test", "Alpha", Some("https://a.test/fav.ico"), 1).unwrap();
+        store.add_bookmark("https://b.test", "Beta", None, 2).unwrap();
         assert_eq!(store.bookmarks().unwrap().len(), 2);
         assert_eq!(store.search_bookmarks("alp", 5).unwrap()[0].id, a);
         assert_eq!(store.search_bookmarks("100%_x", 5).unwrap().len(), 0);
+        assert!(store.is_bookmarked("https://a.test").unwrap());
+        assert!(!store.is_bookmarked("https://nonexistent.test").unwrap());
+        store.update_bookmark_favicon("https://b.test", "https://b.test/icon.png").unwrap();
+        assert_eq!(store.search_bookmarks("Beta", 1).unwrap()[0].favicon.as_deref(), Some("https://b.test/icon.png"));
         assert_eq!(store.remove_bookmark(a).unwrap(), 1);
         assert_eq!(store.bookmarks().unwrap().len(), 1);
+        assert_eq!(store.remove_bookmark_by_url("https://b.test").unwrap(), 1);
+        assert_eq!(store.bookmarks().unwrap().len(), 0);
+
+        store.seed_default_bookmarks(100).unwrap();
+        assert_eq!(store.bookmarks().unwrap().len(), 5);
     }
 
     #[test]

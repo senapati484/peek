@@ -17,7 +17,16 @@ export type TabInfo = {
   discarded: boolean;
   loading: boolean;
   audible: boolean;
+  pinned: boolean;
   active: boolean;
+};
+
+export type PinnedSite = {
+  id: number;
+  url: string;
+  title: string;
+  favicon: string | null;
+  position: number;
 };
 
 export type SuggestionKind = 'history' | 'tab' | 'bookmark' | 'search';
@@ -61,6 +70,7 @@ export type PeekEvent =
       startBlank: boolean;
       searchEngine: string;
     }
+  | { type: 'pinnedSitesChanged'; sites: PinnedSite[] }
   | { type: 'toast'; message: string };
 
 export type PeekCommand =
@@ -92,6 +102,10 @@ export type PeekCommand =
   | { type: 'toggleExtension'; id: string; enabled: boolean }
   | { type: 'uninstallExtension'; id: string }
   | { type: 'getExtensions' }
+  | { type: 'pinSite'; url: string; title?: string | null; favicon?: string | null }
+  | { type: 'unpinSite'; url: string }
+  | { type: 'pinTab'; id: number; pinned: boolean }
+  | { type: 'getPinnedSites' }
   | { type: 'clearCookies' }
   | { type: 'getCookies' }
   | { type: 'quit' };

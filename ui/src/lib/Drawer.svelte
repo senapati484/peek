@@ -99,6 +99,9 @@
       : tabs
   );
 
+  let pinnedTabs = $derived(filteredTabs.filter((t) => t.pinned));
+  let regularTabs = $derived(filteredTabs.filter((t) => !t.pinned));
+
   function close(): void {
     send({ type: 'setDrawer', open: false });
   }
@@ -382,8 +385,82 @@
     </div>
 
     <div class="body tabs-body">
+      {#if pinnedTabs.length > 0}
+        <div class="tabs-subgroup-header">
+          <span class="subgroup-title">PINNED TABS</span>
+          <span class="subgroup-count">{pinnedTabs.length}</span>
+        </div>
+        <ul class="tabs-list pinned-tabs-list">
+          {#each pinnedTabs as tab (tab.id)}
+            <li
+              class:active={tab.id === activeTabId}
+              class:discarded={tab.discarded}
+              class="is-pinned-tab"
+            >
+              <button
+                class="tab-row"
+                onclick={() => switchTo(tab.id)}
+                title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
+              >
+                {#if tab.favicon}
+                  <img
+                    src={tab.favicon}
+                    alt=""
+                    class="favicon"
+                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                {:else}
+                  <span class="favicon-initial">{domainInitial(tab.url)}</span>
+                {/if}
+                <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
+                {#if tab.audible}
+                  <span class="pill audio" title="Audible tab">
+                    <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
+                      <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
+                    </svg>
+                    Audio
+                  </span>
+                {/if}
+                <span class="pill pin-badge" title="Pinned tab (protected from eviction)">
+                  📌
+                </span>
+              </button>
+              <button
+                class="tab-pin-btn is-pinned"
+                title="Unpin tab"
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  send({ type: 'pinTab', id: tab.id, pinned: false });
+                }}
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" class="tab-pin-icon">
+                  <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <button
+                class="tab-close"
+                title="Close tab (Cmd+W)"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  send({ type: 'closeTab', id: tab.id });
+                }}
+              >
+                ×
+              </button>
+            </li>
+          {/each}
+        </ul>
+        {#if regularTabs.length > 0}
+          <div class="tabs-subgroup-header" style="margin-top: 10px;">
+            <span class="subgroup-title">ALL TABS</span>
+            <span class="subgroup-count">{regularTabs.length}</span>
+          </div>
+        {/if}
+      {/if}
+
       <ul class="tabs-list">
-        {#each filteredTabs as tab, idx (tab.id)}
+        {#each regularTabs as tab, idx (tab.id)}
           <li
             class:active={tab.id === activeTabId}
             class:discarded={tab.discarded}
@@ -421,6 +498,19 @@
                   ☾ Sleeping
                 </span>
               {/if}
+            </button>
+            <button
+              class="tab-pin-btn"
+              title="Pin tab"
+              type="button"
+              onclick={(e) => {
+                e.stopPropagation();
+                send({ type: 'pinTab', id: tab.id, pinned: true });
+              }}
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tab-pin-icon">
+                <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
             {#if !tab.discarded && tab.id !== activeTabId}
               <button
@@ -1215,7 +1305,30 @@
     background: color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
-  /* Tabs List */
+  /* Tabs List & Pinned Subgroups */
+  .tabs-subgroup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    user-select: none;
+  }
+
+  .subgroup-title {
+    text-transform: uppercase;
+  }
+
+  .subgroup-count {
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    font-size: 9.5px;
+  }
+
   .tabs-list {
     list-style: none;
     margin: 0;
@@ -1223,6 +1336,10 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .tabs-list.pinned-tabs-list {
+    margin-bottom: 8px;
   }
 
   .tabs-list li {
@@ -1233,12 +1350,18 @@
     transition: background 0.12s ease;
   }
 
+  .tabs-list li.is-pinned-tab {
+    background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+    border: 1px solid var(--border-subtle);
+  }
+
   .tabs-list li:hover {
     background: var(--hover);
   }
 
   .tabs-list li.active {
     background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
     font-weight: 550;
   }
 
@@ -1317,6 +1440,47 @@
     color: var(--muted);
     border: 1px solid var(--border-subtle);
     font-size: 9px;
+  }
+
+  .pill.pin-badge {
+    background: transparent;
+    padding: 0 2px;
+    font-size: 11px;
+    opacity: 0.85;
+  }
+
+  .tab-pin-btn {
+    all: unset;
+    flex: 0 0 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    margin-right: 2px;
+  }
+
+  .tab-pin-btn.is-pinned {
+    opacity: 0.9;
+    color: var(--accent);
+  }
+
+  .tabs-list li:hover .tab-pin-btn {
+    opacity: 1;
+  }
+
+  .tab-pin-btn:hover {
+    background: var(--hover);
+    color: var(--accent);
+  }
+
+  .tab-pin-icon {
+    width: 12px;
+    height: 12px;
   }
 
   .tab-sleep-btn {
