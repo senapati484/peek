@@ -90,6 +90,20 @@ EOF
 
 touch "$APP_BUNDLE"
 
-echo "==> Done! Successfully created: $ROOT_DIR/Peek.app"
+echo "==> 5. Creating macOS DMG installer package..."
+DIST_DIR="$ROOT_DIR/dist"
+mkdir -p "$DIST_DIR"
+STAGING_DIR="/tmp/peek_dmg_staging_$$"
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+cp -R "$APP_BUNDLE" "$STAGING_DIR/"
+ln -s /Applications "$STAGING_DIR/Applications"
+hdiutil create -volname "Peek" -srcfolder "$STAGING_DIR" -ov -format UDZO "$DIST_DIR/Peek-macos-arm64.dmg" >/dev/null
+rm -rf "$STAGING_DIR"
+
+echo "==> Done! Successfully created:"
+echo "    App bundle: $ROOT_DIR/Peek.app"
+echo "    DMG installer: $DIST_DIR/Peek-macos-arm64.dmg"
+echo ""
 echo "Launch it with:"
 echo "    open Peek.app"

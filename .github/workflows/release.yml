@@ -61,7 +61,13 @@ jobs:
         run: |
           mkdir -p dist
           zip -r -y dist/Peek-macos-universal.zip Peek.app
-          hdiutil create -volname "Peek" -srcfolder Peek.app -ov -format UDZO dist/Peek-macos-universal.dmg
+          STAGING_DIR="/tmp/peek_dmg_staging"
+          rm -rf "$STAGING_DIR"
+          mkdir -p "$STAGING_DIR"
+          cp -R Peek.app "$STAGING_DIR/"
+          ln -s /Applications "$STAGING_DIR/Applications"
+          hdiutil create -volname "Peek" -srcfolder "$STAGING_DIR" -ov -format UDZO dist/Peek-macos-universal.dmg
+          rm -rf "$STAGING_DIR"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
