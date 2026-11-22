@@ -216,6 +216,7 @@ impl Engine for WryEngine {
             .with_incognito(options.incognito)
             .with_devtools(options.devtools)
             .with_accept_first_mouse(options.accept_first_mouse)
+            .with_general_autofill_enabled(true)
             .with_back_forward_navigation_gestures(true);
 
         #[cfg(any(target_os = "macos", target_os = "ios"))]

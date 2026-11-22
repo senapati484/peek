@@ -6,6 +6,16 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod crx;
+pub mod matcher;
+pub mod registry;
+pub mod shim;
+
+pub use crx::extract_crx_or_zip;
+pub use matcher::{matches_any, matches_pattern, MatchPattern};
+pub use registry::{ExtensionRegistry, InstalledExtension};
+pub use shim::wrap_content_script;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ExtError {
     #[error("manifest.json is not valid JSON: {0}")]
@@ -14,6 +24,12 @@ pub enum ExtError {
     ManifestVersion(i64),
     #[error("manifest has no name")]
     MissingName,
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("zip extraction error: {0}")]
+    Zip(String),
+    #[error("invalid package: {0}")]
+    InvalidPackage(String),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

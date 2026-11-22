@@ -17,6 +17,7 @@ peek-engine.workspace = true
 peek-core.workspace = true
 peek-preview.workspace = true
 peek-adblock.workspace = true
+peek-ext.workspace = true
 
 tao.workspace = true
 wry.workspace = true

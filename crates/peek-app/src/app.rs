@@ -8,6 +8,7 @@ use peek_core::tabs::{TabAction, TabConfig, TabManager};
 use peek_core::url::{resolve_input, NavigateTarget, SearchEngine};
 use peek_core::now_ms;
 use peek_adblock::{AdblockConfig, AdblockEngine, BlockCounters};
+use peek_ext::ExtensionRegistry;
 use peek_engine::{
     Bounds, Engine, EngineEvents, LoadEvent, WebViewId, WebViewOptions, WryEngine,
 };
@@ -168,6 +169,7 @@ pub struct App {
     profile_uuid: [u8; 16],
     current_drawer_side: EdgeSide,
     current_profile_name: String,
+    extensions: ExtensionRegistry,
 }
 
 impl App {
@@ -220,6 +222,9 @@ impl App {
         };
         let profile_web_data_dir = profile_dir.join("web_data");
         let _ = std::fs::create_dir_all(&profile_web_data_dir);
+        let extensions_dir = profile_dir.join("extensions");
+        let _ = std::fs::create_dir_all(&extensions_dir);
+        let extensions = ExtensionRegistry::load_from_dir(&extensions_dir);
 
         let current_drawer_side = settings.drawer_side;
         Ok(Self {
@@ -251,6 +256,7 @@ impl App {
             profile_uuid,
             current_drawer_side,
             current_profile_name: "default".to_string(),
+            extensions,
         })
     }
 
@@ -360,6 +366,9 @@ impl App {
                 if tab_url.starts_with("http://") || tab_url.starts_with("https://") {
                     let _ = self.store.record_visit(&tab_url, &title, now_ms());
                     self.apply_cosmetic_filters(view, &tab_url);
+                    for script in self.extensions.matching_content_scripts(&tab_url, &self.page_nonce) {
+                        let _ = self.engine.evaluate(view, &script);
+                    }
                 }
 
                 if let Some(id) = self.ui_id {
