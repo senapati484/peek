@@ -198,6 +198,24 @@
   onMount(() => {
     onEvent(handleEvent);
     requestState();
+
+    const syncTheme = () => {
+      const savedTheme = localStorage.getItem('peek_theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.dataset.theme = 'dark';
+      } else if (savedTheme === 'light') {
+        document.documentElement.dataset.theme = 'light';
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+      const savedAccent = localStorage.getItem('peek_accent');
+      if (savedAccent) {
+        document.documentElement.dataset.accent = savedAccent;
+      }
+    };
+    syncTheme();
+    window.addEventListener('storage', syncTheme);
+
     const onWindowKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
         event.preventDefault();
@@ -208,7 +226,10 @@
     if (isStartPage) {
       setTimeout(() => inputEl?.focus(), 60);
     }
-    return () => window.removeEventListener('keydown', onWindowKey, true);
+    return () => {
+      window.removeEventListener('keydown', onWindowKey, true);
+      window.removeEventListener('storage', syncTheme);
+    };
   });
 </script>
 
@@ -247,8 +268,8 @@
       <div class="search-box">
         <div class="search-input-wrap">
           <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-            <circle cx="9" cy="9" r="6" stroke-width="1.8" stroke-linecap="round" />
-            <path d="M13.5 13.5L17.5 17.5" stroke-width="1.8" stroke-linecap="round" />
+            <circle cx="9" cy="9" r="5.5" stroke-width="1.7" stroke-linecap="round" />
+            <path d="M13 13L17 17" stroke-width="1.7" stroke-linecap="round" />
           </svg>
           <input
             bind:this={inputEl}
@@ -259,7 +280,7 @@
               focused = true;
               send({ type: 'setOmnibarOpen', open: true });
             }}
-            placeholder={`Search with ${searchEngine} or enter URL...`}
+            placeholder=""
             spellcheck="false"
             autocomplete="off"
             autocapitalize="off"
@@ -516,7 +537,7 @@
     justify-content: center;
     min-height: 100vh;
     padding: 32px 24px;
-    background: #ffffff;
+    background: var(--bg);
     animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -534,22 +555,24 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 4px 10px 4px 6px;
+    padding: 4px 11px 4px 5px;
     border-radius: 9999px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #334155;
+    background: color-mix(in srgb, var(--panel) 75%, transparent);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     transition: all 0.15s ease;
   }
 
   .start-profile-chip:hover {
-    background: #e2e8f0;
-    color: #0f172a;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
   }
 
   .profile-avatar-dot {
@@ -559,7 +582,7 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: #3b82f6;
+    background: var(--accent);
     color: #ffffff;
     font-size: 10.5px;
     font-weight: 700;
@@ -572,7 +595,7 @@
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px) scale(0.99);
+      transform: translateY(8px) scale(0.99);
     }
     to {
       opacity: 1;
@@ -584,7 +607,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 22px;
   }
 
   .logo-wrapper {
@@ -592,16 +615,12 @@
     margin-bottom: 0;
   }
 
-  .logo-wrapper::after {
-    display: none;
-  }
-
   .hero-logo {
     position: relative;
-    width: 76px;
-    height: 76px;
-    border-radius: 18px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+    width: 68px;
+    height: 68px;
+    border-radius: 17px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 32px -8px var(--accent-glow);
     z-index: 1;
     transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -610,49 +629,56 @@
     transform: scale(1.05);
   }
 
+  /* Sleek Compact Pill Search Bar */
   .search-box {
     width: 100%;
-    max-width: 580px;
+    max-width: 360px;
     position: relative;
-    border-radius: var(--radius-lg);
-    background: #ffffff;
-    border: 1.5px solid #e2e8f0;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .search-box:focus-within {
-    border-color: #3b82f6;
-    box-shadow: 0 8px 30px rgba(59, 130, 246, 0.15), 0 0 0 3px rgba(59, 130, 246, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+    background: var(--panel);
   }
 
   .search-input-wrap {
     display: flex;
     align-items: center;
-    height: 50px;
-    padding: 0 16px;
-    gap: 12px;
+    height: 38px;
+    padding: 0 14px;
+    gap: 10px;
+    border-radius: 9999px;
   }
 
   .search-icon {
-    width: 19px;
-    height: 19px;
+    width: 15px;
+    height: 15px;
     color: var(--muted);
     flex-shrink: 0;
+    transition: color 0.15s ease;
+  }
+
+  .search-box:focus-within .search-icon {
+    color: var(--accent);
   }
 
   .search-input-wrap input {
     flex: 1;
+    min-width: 0;
     border: none;
     outline: none;
     background: transparent;
     color: var(--text);
-    font-size: 14.5px;
-    letter-spacing: 0.01em;
-  }
-
-  .search-input-wrap input::placeholder {
-    color: var(--muted);
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
   }
 
   .clear-btn {
@@ -660,11 +686,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     color: var(--muted);
-    font-size: 18px;
+    font-size: 14px;
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
   }
@@ -675,11 +701,21 @@
   }
 
   .start-suggestions {
-    border-top: 1px solid var(--border);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     padding: 6px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    z-index: 50;
   }
 
   .suggest-item {
@@ -687,10 +723,10 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    padding: 9px 12px;
+    padding: 8px 12px;
     border-radius: 8px;
     text-align: left;
-    font-size: 13.5px;
+    font-size: 13px;
     cursor: pointer;
     transition: background 0.12s ease;
   }
@@ -700,15 +736,15 @@
     background: var(--hover);
   }
 
-  /* Docked Top Bar: Clean Full-White Toolbar */
+  /* Docked Top Bar: Clean Full-Width Toolbar */
   .bar-container {
     width: 100%;
     height: 36px;
-    background: #ffffff;
-    border-bottom: 1px solid #e5e7eb;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
-    padding: 0 8px;
+    padding: 0 10px;
     box-sizing: border-box;
     pointer-events: auto;
   }
@@ -720,18 +756,18 @@
     height: 28px;
     width: 100%;
     margin: 0;
-    padding: 0 8px;
-    border: 1px solid #e5e7eb;
-    border-radius: 7px;
-    background: #f9fafb;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    background: var(--surface-2);
+    box-shadow: var(--shadow-sm);
     transition: all 0.15s ease;
   }
 
   .bar:focus-within {
-    background: #ffffff;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+    background: var(--panel);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
   .logo-btn {

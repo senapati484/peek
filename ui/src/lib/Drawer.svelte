@@ -130,12 +130,14 @@
     } else {
       document.documentElement.dataset.theme = mode;
     }
+    window.dispatchEvent(new Event('storage'));
   }
 
   function applyAccent(accent: 'blue' | 'purple' | 'emerald' | 'amber' | 'rose') {
     accentColor = accent;
     localStorage.setItem('peek_accent', accent);
     document.documentElement.dataset.accent = accent;
+    window.dispatchEvent(new Event('storage'));
   }
 
   function handleCreateProfile() {
