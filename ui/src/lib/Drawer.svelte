@@ -52,7 +52,11 @@
   // Settings
   let maxLive = $state(5);
   let idleMinutes = $state(10);
-  let hoverDelay = $state(80);
+  let hoverDelay = $state(150);
+  let previewWidth = $state(480);
+  let previewHeight = $state(320);
+  let previewZoom = $state(0.75);
+  let previewModifierOnly = $state(true);
   let configuredDrawerSide = $state<EdgeSide>('right');
   let edgeZone = $state(4);
   let startBlank = $state(false);
@@ -108,6 +112,16 @@
     send({ type: 'setSetting', key, value });
   }
 
+  function domainInitial(url: string): string {
+    try {
+      const u = new URL(url);
+      const h = u.hostname.replace(/^www\./, '');
+      return (h[0] || 'P').toUpperCase();
+    } catch {
+      return 'P';
+    }
+  }
+
   function applyTheme(mode: 'system' | 'dark' | 'light') {
     themeMode = mode;
     localStorage.setItem('peek_theme', mode);
@@ -144,17 +158,27 @@
   }
 
   function handleInstallExtension() {
-    const trimmed = extensionInstallPath.trim();
-    if (!trimmed) return;
-    send({ type: 'installExtension', path: trimmed });
+    const path = extensionInstallPath.trim();
+    if (!path) return;
+    send({ type: 'installExtension', path });
     extensionInstallPath = '';
+  }
+
+  function handleToggleExtension(id: string, current: boolean) {
+    send({ type: 'toggleExtension', id, enabled: !current });
+  }
+
+  function handleUninstallExtension(id: string) {
+    if (confirm('Uninstall this extension?')) {
+      send({ type: 'uninstallExtension', id });
+    }
   }
 
   function handleEvent(event: PeekEvent): void {
     switch (event.type) {
       case 'tabsChanged':
         tabs = event.tabs;
-        activeTabId = event.active;
+        activeTabId = event.tabs.find((t) => t.active)?.id ?? null;
         break;
       case 'adblockCount':
         blocked = event.blocked;
@@ -172,7 +196,7 @@
         break;
       case 'drawerState':
         if (!event.open) {
-          send({ type: 'setDrawer', open: false });
+          // rust closed
         } else {
           if (event.side) {
             currentSide = event.side;
@@ -220,7 +244,6 @@
   }
 
   onMount(() => {
-    // Load local theme preference
     const savedTheme = localStorage.getItem('peek_theme') as 'system' | 'dark' | 'light' | null;
     if (savedTheme) applyTheme(savedTheme);
     const savedAccent = localStorage.getItem('peek_accent') as 'blue' | 'purple' | 'emerald' | 'amber' | 'rose' | null;
@@ -256,42 +279,66 @@
     </header>
 
     <div class="filter-wrap">
-      <input
-        type="search"
-        bind:value={filterText}
-        placeholder="Search tabs..."
-        class="filter-input"
-      />
+      <div class="filter-box">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
+          <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+          <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Filter tabs..."
+          bind:value={filterText}
+          class="filter-input"
+        />
+        {#if filterText}
+          <button class="clear-filter" onclick={() => filterText = ''}>×</button>
+        {/if}
+      </div>
     </div>
 
     <div class="body tabs-body">
       <ul class="tabs-list">
-        {#each filteredTabs as tab, index (tab.id)}
+        {#each filteredTabs as tab, idx (tab.id)}
           <li
-            class:active={tab.active}
+            class:active={tab.id === activeTabId}
             class:discarded={tab.discarded}
             draggable="true"
-            ondragstart={(event) => onDragStart(event, tab.id)}
-            ondragover={(event) => event.preventDefault()}
-            ondrop={(event) => onDrop(event, index)}
+            ondragstart={(e) => onDragStart(e, tab.id)}
+            ondragover={(e) => e.preventDefault()}
+            ondrop={(e) => onDrop(e, idx)}
           >
-            <button class="tab-row" onclick={() => switchTo(tab.id)}>
+            <button
+              class="tab-row"
+              onclick={() => switchTo(tab.id)}
+              title={`${tab.title || tab.url}\n${tab.url}`}
+            >
               {#if tab.favicon}
-                <img class="favicon" src={tab.favicon} alt="" />
+                <img
+                  src={tab.favicon}
+                  alt=""
+                  class="favicon"
+                  onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
               {:else}
-                <span class="favicon dot"></span>
+                <span class="favicon-initial">{domainInitial(tab.url)}</span>
               {/if}
-              <span class="title">{tab.title || tab.url}</span>
+              <span class="title">{tab.title || tab.url || 'Untitled'}</span>
               {#if tab.audible}
-                <span class="pill audio" title="Playing audio">♪</span>
+                <span class="pill audio" title="Audible tab">
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
+                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
+                  </svg>
+                  Audio
+                </span>
               {/if}
               {#if tab.discarded}
-                <span class="pill sleep" title="Sleeping (memory saved)">zzz</span>
+                <span class="pill sleep" title="Tab sleeping to save memory">
+                  zZ
+                </span>
               {/if}
             </button>
             <button
               class="tab-close"
-              aria-label="Close tab"
               title="Close tab (Cmd+W)"
               onclick={(e) => {
                 e.stopPropagation();
@@ -302,7 +349,10 @@
             </button>
           </li>
         {:else}
-          <li class="empty">No matching tabs</li>
+          <li class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <span class="empty-text">No tabs match "{filterText}"</span>
+          </li>
         {/each}
       </ul>
     </div>
@@ -330,7 +380,7 @@
         <button class:on={section === 'blocking'} onclick={() => (section = 'blocking')}>Adblock</button>
         <button class:on={section === 'preview'} onclick={() => (section = 'preview')}>Preview</button>
         <button class:on={section === 'profiles'} onclick={() => (section = 'profiles')}>Profiles</button>
-        <button class:on={section === 'extensions'} onclick={() => (section = 'extensions')}>Ext</button>
+        <button class:on={section === 'extensions'} onclick={() => (section = 'extensions')}>Extensions</button>
         <button class:on={section === 'shortcuts'} onclick={() => (section = 'shortcuts')}>Keys</button>
         <button class:on={section === 'about'} onclick={() => (section = 'about')}>About</button>
       </nav>
@@ -338,357 +388,434 @@
 
     <div class="body settings-body">
       {#if section === 'general'}
-        <div class="section-title">General Preferences</div>
-        <div class="field">
-          <label for="search-eng">Default Search Engine</label>
-          <select
-            id="search-eng"
-            value={searchEngine}
-            onchange={(e) => setting('searchEngine', (e.currentTarget as HTMLSelectElement).value)}
-          >
-            <option value="Google">Google</option>
-            <option value="DuckDuckGo">DuckDuckGo</option>
-            <option value="Brave">Brave Search</option>
-            <option value="Bing">Bing</option>
-            <option value="Ecosia">Ecosia</option>
-          </select>
+        <div class="section-title">Search & Browsing</div>
+        <div class="card settings-card">
+          <div class="field">
+            <label for="search-eng">Default Search Engine</label>
+            <select
+              id="search-eng"
+              value={searchEngine}
+              onchange={(e) => setting('searchEngine', (e.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="Google">Google</option>
+              <option value="DuckDuckGo">DuckDuckGo</option>
+              <option value="Brave">Brave Search</option>
+              <option value="Bing">Bing</option>
+              <option value="Ecosia">Ecosia</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="side">Default Drawer Side</label>
+            <select
+              id="side"
+              value={configuredDrawerSide}
+              onchange={(e) => setting('drawerSide', (e.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="right">Right</option>
+              <option value="left">Left</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="edge">Edge Hover Zone (px)</label>
+            <input
+              id="edge"
+              type="number"
+              min="1"
+              max="16"
+              value={edgeZone}
+              onchange={(e) => setting('edgeZone', Number((e.currentTarget as HTMLInputElement).value))}
+            />
+          </div>
+
+          <div class="field switch-field">
+            <span>Always open new tabs with Start Page</span>
+            <label class="switch">
+              <input
+                type="checkbox"
+                checked={startBlank}
+                onchange={(e) => setting('startBlank', (e.currentTarget as HTMLInputElement).checked)}
+              />
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="side">Default Drawer Side</label>
-          <select
-            id="side"
-            value={configuredDrawerSide}
-            onchange={(e) => setting('drawerSide', (e.currentTarget as HTMLSelectElement).value)}
-          >
-            <option value="right">Right</option>
-            <option value="left">Left</option>
-          </select>
-        </div>
+        <div class="section-title" style="margin-top: 18px;">Tab & Memory Budget</div>
+        <div class="card settings-card">
+          <div class="field">
+            <div>
+              <label for="max-live">Max Live Tabs (LRU)</label>
+              <p class="field-desc">Background tabs beyond this count are discarded</p>
+            </div>
+            <input
+              id="max-live"
+              type="number"
+              min="1"
+              max="20"
+              value={maxLive}
+              onchange={(e) => setting('maxLive', Number((e.currentTarget as HTMLInputElement).value))}
+            />
+          </div>
 
-        <div class="field">
-          <label for="edge">Edge Hot-Zone (px)</label>
-          <input
-            id="edge"
-            type="number"
-            min="1"
-            max="16"
-            value={edgeZone}
-            onchange={(e) => setting('edgeZone', Number((e.currentTarget as HTMLInputElement).value))}
-          />
-        </div>
-
-        <label class="toggle-row">
-          <input
-            type="checkbox"
-            checked={startBlank}
-            onchange={(e) => setting('startBlank', (e.currentTarget as HTMLInputElement).checked)}
-          />
-          <span>Always open new tabs with centered start page</span>
-        </label>
-
-        <div class="section-title" style="margin-top: 20px;">Resource Management</div>
-        <div class="field">
-          <label for="max-live">Max Live Tabs (LRU)</label>
-          <input
-            id="max-live"
-            type="number"
-            min="1"
-            max="20"
-            value={maxLive}
-            onchange={(e) => setting('maxLive', Number((e.currentTarget as HTMLInputElement).value))}
-          />
-        </div>
-        <div class="field">
-          <label for="idle">Sleep Idle Tabs (Minutes)</label>
-          <input
-            id="idle"
-            type="number"
-            min="1"
-            max="120"
-            value={idleMinutes}
-            onchange={(e) => setting('idleDiscardMinutes', Number((e.currentTarget as HTMLInputElement).value))}
-          />
+          <div class="field" style="border-bottom: none;">
+            <div>
+              <label for="idle-time">Idle Discard (minutes)</label>
+              <p class="field-desc">Inactive background tabs are put to sleep</p>
+            </div>
+            <input
+              id="idle-time"
+              type="number"
+              min="1"
+              max="120"
+              value={idleMinutes}
+              onchange={(e) => setting('idleDiscardMinutes', Number((e.currentTarget as HTMLInputElement).value))}
+            />
+          </div>
         </div>
 
       {:else if section === 'appearance'}
-        <div class="section-title">Color Theme</div>
+        <div class="section-title">Color Scheme</div>
         <div class="theme-options">
           <button
             class="choice-btn"
             class:selected={themeMode === 'system'}
             onclick={() => applyTheme('system')}
           >
-            💻 System
+            <span class="theme-icon">◐</span>
+            Auto System
           </button>
           <button
             class="choice-btn"
             class:selected={themeMode === 'dark'}
             onclick={() => applyTheme('dark')}
           >
-            🌙 Dark
+            <span class="theme-icon">☾</span>
+            Dark Mode
           </button>
           <button
             class="choice-btn"
             class:selected={themeMode === 'light'}
             onclick={() => applyTheme('light')}
           >
-            ☀️ Light
+            <span class="theme-icon">☼</span>
+            Light Mode
           </button>
         </div>
 
-        <div class="section-title" style="margin-top: 20px;">Accent Color</div>
-        <div class="accent-palette">
-          <button
-            class="accent-dot"
-            style="background: #3b82f6;"
-            class:selected={accentColor === 'blue'}
-            onclick={() => applyAccent('blue')}
-            title="Iris Blue"
-          ></button>
-          <button
-            class="accent-dot"
-            style="background: #8b5cf6;"
-            class:selected={accentColor === 'purple'}
-            onclick={() => applyAccent('purple')}
-            title="Electric Purple"
-          ></button>
-          <button
-            class="accent-dot"
-            style="background: #10b981;"
-            class:selected={accentColor === 'emerald'}
-            onclick={() => applyAccent('emerald')}
-            title="Emerald Green"
-          ></button>
-          <button
-            class="accent-dot"
-            style="background: #f59e0b;"
-            class:selected={accentColor === 'amber'}
-            onclick={() => applyAccent('amber')}
-            title="Amber Warm"
-          ></button>
-          <button
-            class="accent-dot"
-            style="background: #f43f5e;"
-            class:selected={accentColor === 'rose'}
-            onclick={() => applyAccent('rose')}
-            title="Rose Crimson"
-          ></button>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <div class="card-title">Theme Tokens</div>
-          <p class="note">UI typography and token overrides are dynamically loaded via CSS variables.</p>
+        <div class="section-title" style="margin-top: 20px;">Accent Hue</div>
+        <div class="card settings-card">
+          <div class="accent-palette">
+            <button
+              class="accent-dot"
+              class:selected={accentColor === 'blue'}
+              style="background: #3b82f6;"
+              onclick={() => applyAccent('blue')}
+              title="Electric Blue"
+            ></button>
+            <button
+              class="accent-dot"
+              class:selected={accentColor === 'purple'}
+              style="background: #8b5cf6;"
+              onclick={() => applyAccent('purple')}
+              title="Neon Violet"
+            ></button>
+            <button
+              class="accent-dot"
+              class:selected={accentColor === 'emerald'}
+              style="background: #10b981;"
+              onclick={() => applyAccent('emerald')}
+              title="Emerald Green"
+            ></button>
+            <button
+              class="accent-dot"
+              class:selected={accentColor === 'amber'}
+              style="background: #f59e0b;"
+              onclick={() => applyAccent('amber')}
+              title="Warm Amber"
+            ></button>
+            <button
+              class="accent-dot"
+              class:selected={accentColor === 'rose'}
+              style="background: #f43f5e;"
+              onclick={() => applyAccent('rose')}
+              title="Rose Quartz"
+            ></button>
+          </div>
         </div>
 
       {:else if section === 'blocking'}
         <div class="card stat-card">
           <div class="stat-big">{blocked}</div>
-          <div class="stat-label">Requests blocked in this tab</div>
+          <div class="stat-label">Trackers & Ads Blocked This Session</div>
         </div>
 
         {#if host}
-          <div class="card" style="margin-top: 10px;">
-            <label class="toggle-row">
-              <input
-                type="checkbox"
-                checked={!allowedOnSite}
-                onchange={() => send({ type: 'setSiteAdblock', host: host!, enabled: allowedOnSite })}
-              />
-              <span>Block trackers and ads on <strong>{host}</strong></span>
-            </label>
+          <div class="card settings-card" style="margin-top: 14px;">
+            <div class="field switch-field" style="border-bottom: none;">
+              <div>
+                <span class="field-label-bold">Protection on {host}</span>
+                <p class="field-desc">Adblock and tracker protection on current site</p>
+              </div>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  checked={!allowedOnSite}
+                  onchange={() => { if (host) send({ type: 'setSiteAdblock', host, enabled: allowedOnSite }); }}
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
           </div>
         {/if}
 
-        <div class="card" style="margin-top: 10px;">
-          <div class="card-title">Filter Engine</div>
-          <p class="note">Native Brave adblock engine with uBlock Origin syntax, EasyList, EasyPrivacy, cosmetic rules and XHR blocking.</p>
+        <div class="section-title" style="margin-top: 18px;">Built-in Privacy Engine</div>
+        <div class="card settings-card">
+          <div class="filter-item">
+            <div class="filter-status-dot"></div>
+            <div>
+              <div class="filter-name">EasyList & EasyPrivacy</div>
+              <div class="filter-desc">Network-level blocking & cosmetic filtering</div>
+            </div>
+          </div>
+          <div class="filter-item">
+            <div class="filter-status-dot"></div>
+            <div>
+              <div class="filter-name">uBlock Origin Filters</div>
+              <div class="filter-desc">Anti-malware & behavioral telemetry prevention</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card settings-card" style="margin-top: 14px;">
+          <div class="field" style="border-bottom: none;">
+            <div>
+              <span class="field-label-bold">Cookies & Local Storage</span>
+              <p class="field-desc">{cookiesCount} stored domain cookies</p>
+            </div>
+            <button class="danger-btn" onclick={() => send({ type: 'clearCookies' })}>
+              Clear Data
+            </button>
+          </div>
         </div>
 
       {:else if section === 'preview'}
-        <div class="section-title">Hover Preview Configuration</div>
-        <p class="note" style="margin-bottom: 12px;">Hold modifier key and hover any link to peek at the page live without leaving your tab.</p>
+        <div class="section-title">Hover Preview (Signature Feature)</div>
+        <div class="card settings-card">
+          <div class="field switch-field">
+            <div>
+              <span class="field-label-bold">Require ⌘ / Ctrl Key</span>
+              <p class="field-desc">Hold ⌘ (macOS) or Ctrl while hovering links</p>
+            </div>
+            <label class="switch">
+              <input
+                type="checkbox"
+                checked={previewModifierOnly}
+                onchange={(e) => {
+                  previewModifierOnly = (e.currentTarget as HTMLInputElement).checked;
+                  setting('previewModifierOnly', previewModifierOnly);
+                }}
+              />
+              <span class="slider"></span>
+            </label>
+          </div>
 
-        <div class="field">
-          <label for="prev-key">Modifier Key</label>
-          <select id="prev-key">
-            <option value="cmd">⌘ Command (macOS)</option>
-            <option value="ctrl">Ctrl</option>
-            <option value="alt">⌥ Option / Alt</option>
-            <option value="shift">⇧ Shift</option>
-          </select>
-        </div>
+          <div class="field">
+            <label for="h-delay">Hover Delay (ms)</label>
+            <input
+              id="h-delay"
+              type="number"
+              min="50"
+              max="1500"
+              step="50"
+              value={hoverDelay}
+              onchange={(e) => {
+                hoverDelay = Number((e.currentTarget as HTMLInputElement).value);
+                setting('hoverDelayMs', hoverDelay);
+              }}
+            />
+          </div>
 
-        <div class="field">
-          <label for="prev-delay">Hover Debounce (ms)</label>
-          <input
-            id="prev-delay"
-            type="number"
-            min="20"
-            max="400"
-            step="10"
-            value={hoverDelay}
-            onchange={(e) => setting('hoverDelayMs', Number((e.currentTarget as HTMLInputElement).value))}
-          />
-        </div>
+          <div class="field">
+            <label for="p-width">Preview Width (px)</label>
+            <input
+              id="p-width"
+              type="number"
+              min="320"
+              max="800"
+              step="20"
+              value={previewWidth}
+              onchange={(e) => {
+                previewWidth = Number((e.currentTarget as HTMLInputElement).value);
+                setting('previewWidth', previewWidth);
+              }}
+            />
+          </div>
 
-        <div class="card" style="margin-top: 14px;">
-          <div class="card-title">Interaction Keys</div>
-          <p class="note">
-            • <strong>Click</strong> or <strong>Enter</strong> promotes the preview to a real tab.<br />
-            • <strong>Esc</strong> or moving cursor away dismisses it.<br />
-            • Audio and autoplay are completely muted.
-          </p>
+          <div class="field">
+            <label for="p-height">Preview Height (px)</label>
+            <input
+              id="p-height"
+              type="number"
+              min="200"
+              max="600"
+              step="20"
+              value={previewHeight}
+              onchange={(e) => {
+                previewHeight = Number((e.currentTarget as HTMLInputElement).value);
+                setting('previewHeight', previewHeight);
+              }}
+            />
+          </div>
+
+          <div class="field" style="border-bottom: none;">
+            <label for="p-zoom">Preview Zoom Ratio</label>
+            <input
+              id="p-zoom"
+              type="number"
+              min="0.5"
+              max="1.0"
+              step="0.05"
+              value={previewZoom}
+              onchange={(e) => {
+                previewZoom = Number((e.currentTarget as HTMLInputElement).value);
+                setting('previewZoom', previewZoom);
+              }}
+            />
+          </div>
         </div>
 
       {:else if section === 'profiles'}
-        <div class="section-title">Profiles & Storage</div>
-        <p class="note" style="margin-bottom: 12px;">
-          Each profile stores isolated cookies, history, cache and site credentials.
-        </p>
-
+        <div class="section-title">Active Profiles</div>
         <ul class="profile-list">
-          {#each profiles as prof}
-            <li class="profile-item" class:active-profile={prof === activeProfile}>
+          {#each profiles as p}
+            <li class="profile-item card" class:active-profile={p === activeProfile}>
               <div class="profile-info">
-                <span class="profile-avatar">{prof.slice(0, 1).toUpperCase()}</span>
-                <span class="profile-name">{prof}</span>
-                {#if prof === activeProfile}
-                  <span class="badge active-tag">Active</span>
-                {/if}
+                <div class="profile-avatar">{p[0].toUpperCase()}</div>
+                <div>
+                  <div class="profile-name">{p}</div>
+                  {#if p === activeProfile}
+                    <span class="profile-badge">Active</span>
+                  {/if}
+                </div>
               </div>
               <div class="profile-actions">
-                {#if prof !== activeProfile}
-                  <button class="small-btn switch-btn" onclick={() => handleSwitchProfile(prof)}>
-                    Switch
-                  </button>
-                  {#if prof !== 'default'}
-                    <button class="small-btn del-btn" onclick={() => handleDeleteProfile(prof)}>
-                      ✕
-                    </button>
-                  {/if}
+                {#if p !== activeProfile}
+                  <button class="action-btn" onclick={() => handleSwitchProfile(p)}>Switch</button>
+                  <button class="danger-icon-btn" onclick={() => handleDeleteProfile(p)} title="Delete profile">✕</button>
                 {/if}
               </div>
             </li>
           {/each}
         </ul>
 
-        <div class="add-profile-wrap">
-          <input
-            type="text"
-            bind:value={newProfileName}
-            placeholder="New profile name..."
-            class="new-profile-input"
-            onkeydown={(e) => { if (e.key === 'Enter') handleCreateProfile(); }}
-          />
-          <button class="add-btn" onclick={handleCreateProfile}>+ Add</button>
-        </div>
-
-        <div class="card" style="margin-top: 16px;">
-          <div class="field readonly">
-            <span class="key">Stored Cookies</span>
-            <span>{cookiesCount}</span>
+        <div class="card settings-card" style="margin-top: 14px;">
+          <div class="section-title" style="margin-bottom: 6px;">Create New Profile</div>
+          <div class="input-action-row">
+            <input
+              type="text"
+              placeholder="Profile name (e.g. Work)"
+              bind:value={newProfileName}
+              class="text-input"
+            />
+            <button class="primary-btn" onclick={handleCreateProfile}>Create</button>
           </div>
-          <button class="danger-btn" onclick={() => send({ type: 'clearCookies' })}>
-            Clear Cookies & Local Storage
-          </button>
         </div>
 
       {:else if section === 'extensions'}
-        <div class="section-title">Chrome Extension Support</div>
-        <p class="note" style="margin-bottom: 12px;">
-          Import Manifest V3 extensions via unpacked directory or <code>.crx</code> package.
-        </p>
-
-        <div class="add-profile-wrap" style="margin-bottom: 14px;">
-          <input
-            type="text"
-            bind:value={extensionInstallPath}
-            placeholder="Path to folder or .crx..."
-            class="new-profile-input"
-            onkeydown={(e) => { if (e.key === 'Enter') handleInstallExtension(); }}
-          />
-          <button class="add-btn" onclick={handleInstallExtension}>Install</button>
+        <div class="section-title">Install Chrome Extension (MV3)</div>
+        <div class="card settings-card">
+          <p class="field-desc" style="margin-bottom: 8px;">
+            Supports Manifest V3 unpacked directories and .crx packages with isolated content scripts.
+          </p>
+          <div class="input-action-row">
+            <input
+              type="text"
+              placeholder="/path/to/extension or extension.crx"
+              bind:value={extensionInstallPath}
+              class="text-input"
+            />
+            <button class="primary-btn" onclick={handleInstallExtension}>Install</button>
+          </div>
         </div>
 
+        <div class="section-title" style="margin-top: 18px;">Installed Extensions ({extensions.length})</div>
         {#if extensions.length === 0}
-          <div class="card" style="text-align: center; padding: 16px;">
-            <div class="stat-label">No extensions installed</div>
-            <p class="note" style="margin-top: 4px;">Enter a path above to install a Manifest V3 extension.</p>
+          <div class="card empty-card">
+            <div class="empty-icon">🧩</div>
+            <p class="note">No extensions installed yet. Enter an unpacked directory path above to install.</p>
           </div>
         {:else}
-          <ul class="profile-list">
-            {#each extensions as ext}
-              <li class="profile-item" style="flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px;">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <strong style="font-size: 12.5px;">{ext.name}</strong>
-                    <span style="font-size: 10px; color: var(--muted);">v{ext.version}</span>
+          <div class="extensions-list">
+            {#each extensions as ext (ext.id)}
+              <div class="card ext-card">
+                <div class="ext-header">
+                  <div>
+                    <div class="ext-title">{ext.name} <span class="ext-version">v{ext.version}</span></div>
+                    <div class="ext-id">{ext.id}</div>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <label class="toggle-row" style="margin: 0;">
+                  <div class="ext-controls">
+                    <label class="switch">
                       <input
                         type="checkbox"
                         checked={ext.enabled}
-                        onchange={(e) => send({ type: 'toggleExtension', id: ext.id, enabled: (e.currentTarget as HTMLInputElement).checked })}
+                        onchange={() => handleToggleExtension(ext.id, ext.enabled)}
                       />
+                      <span class="slider"></span>
                     </label>
-                    <button class="small-btn del-btn" title="Uninstall" onclick={() => send({ type: 'uninstallExtension', id: ext.id })}>
+                    <button class="danger-icon-btn" onclick={() => handleUninstallExtension(ext.id)} title="Uninstall">
                       ✕
                     </button>
                   </div>
                 </div>
-                {#if ext.description}
-                  <div style="font-size: 11px; color: var(--muted); line-height: 1.3;">{ext.description}</div>
-                {/if}
-                <div>
+
+                <div class="ext-badges">
                   {#if ext.fullySupported}
-                    <span class="badge" style="background: rgba(16, 185, 129, 0.18); color: #10b981; font-size: 9.5px; padding: 2px 6px; border-radius: 4px;">
-                      Tier 1 Verified
-                    </span>
+                    <span class="badge verified">Tier 1 Verified</span>
                   {:else}
-                    <span class="badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b; font-size: 9.5px; padding: 2px 6px; border-radius: 4px;">
-                      Partial MV3
-                    </span>
+                    <span class="badge partial">Partial MV3</span>
                   {/if}
                 </div>
-              </li>
+              </div>
             {/each}
-          </ul>
+          </div>
         {/if}
 
-        <div class="card" style="margin-top: 14px;">
-          <div class="card-title">Manifest V3 Compatibility</div>
-          <p class="note">
-            • <strong>Tier 1 Supported:</strong> <code>storage</code>, <code>runtime</code>, <code>tabs</code>, <code>scripting</code>, <code>action</code>, <code>alarms</code>.<br />
-            • <strong>Tier 2 Partial:</strong> <code>cookies</code>, <code>history</code>, <code>bookmarks</code>.<br />
-            • <strong>Unsupported:</strong> blocking <code>webRequest</code>, DevTools, <code>nativeMessaging</code>.
-          </p>
+      {:else if section === 'shortcuts'}
+        <div class="section-title">Navigation & Window</div>
+        <div class="shortcut-list card settings-card">
+          <div class="key-row"><kbd>⌘ L</kbd> <span>Focus address and search bar</span></div>
+          <div class="key-row"><kbd>⌘ T</kbd> <span>Open blank new tab</span></div>
+          <div class="key-row"><kbd>⌘ W</kbd> <span>Close current active tab</span></div>
+          <div class="key-row"><kbd>⌘ R</kbd> <span>Reload current page</span></div>
+          <div class="key-row"><kbd>Alt + ← / →</kbd> <span>Go back / forward in history</span></div>
         </div>
 
-      {:else if section === 'shortcuts'}
-        <div class="section-title">Keyboard Shortcuts</div>
-        <div class="shortcut-list">
-          <div class="key-row"><kbd>⌘ L</kbd> <span>Focus search / address</span></div>
-          <div class="key-row"><kbd>⌘ T</kbd> <span>Open new tab</span></div>
-          <div class="key-row"><kbd>⌘ W</kbd> <span>Close active tab</span></div>
-          <div class="key-row"><kbd>⌘ ⇧ T</kbd> <span>Reopen closed tab</span></div>
-          <div class="key-row"><kbd>⌘ ⇧ [</kbd> <span>Open Tabs drawer</span></div>
-          <div class="key-row"><kbd>⌘ ⇧ ]</kbd> <span>Open Settings drawer</span></div>
-          <div class="key-row"><kbd>⌘ + Hover</kbd> <span>Live link preview</span></div>
-          <div class="key-row"><kbd>Esc</kbd> <span>Close preview / drawer</span></div>
+        <div class="section-title" style="margin-top: 16px;">Peek Signatures</div>
+        <div class="shortcut-list card settings-card">
+          <div class="key-row"><kbd>⌘ + Hover</kbd> <span>Trigger live link preview</span></div>
+          <div class="key-row"><kbd>⌘ ⇧ [</kbd> <span>Toggle vertical tabs drawer</span></div>
+          <div class="key-row"><kbd>⌘ ⇧ ]</kbd> <span>Toggle settings & tools drawer</span></div>
+          <div class="key-row"><kbd>Esc</kbd> <span>Dismiss preview or close drawer</span></div>
         </div>
 
       {:else if section === 'about'}
         <div class="hero-brand" style="margin: 20px 0;">
-          <img src="/logo.png" alt="Peek" class="drawer-logo" style="width: 44px; height: 44px;" />
-          <h2 style="margin: 8px 0 2px; font-size: 18px;">Peek Browser</h2>
-          <span style="font-size: 12px; color: var(--muted);">v0.1.0 • Pure Rust + WebKit/WebView2</span>
+          <img src="/logo.png" alt="Peek" class="drawer-logo" style="width: 48px; height: 48px;" />
+          <h2 style="margin: 10px 0 2px; font-size: 19px; font-weight: 700;">Peek Browser</h2>
+          <span style="font-size: 12px; color: var(--muted);">v0.1.0 • Pure Rust Native Architecture</span>
         </div>
-        <div class="card">
+        <div class="card settings-card">
           <p class="note">
-            Peek is built with zero framework bloat using direct <code>tao</code> and <code>wry</code> bindings, native system WebViews, Brave adblock, and an ephemeral hover preview architecture.
+            Peek is built with zero framework bloat using direct <code>tao</code> and <code>wry</code> bindings, native system WebViews, Brave adblock engine, and an ephemeral hover preview architecture.
           </p>
+        </div>
+        <div class="card settings-card" style="margin-top: 12px;">
+          <div class="tech-row"><span>Engine</span> <strong>tao + wry (WebKit/WebView2)</strong></div>
+          <div class="tech-row"><span>Database</span> <strong>SQLite FTS5 + Connection Pool</strong></div>
+          <div class="tech-row"><span>Adblock</span> <strong>Brave Adblock Engine (Rust)</strong></div>
+          <div class="tech-row"><span>Extensions</span> <strong>Manifest V3 Host Engine</strong></div>
         </div>
       {/if}
     </div>
@@ -705,16 +832,18 @@
     flex-direction: column;
     height: 100vh;
     background: var(--panel);
-    box-shadow: var(--shadow);
-    animation: drawerSlide 0.22s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--shadow-lg);
+    animation: drawerSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .drawer.left {
     border-inline-end: 1px solid var(--border);
+    --slide-dir: -12px;
   }
 
   .drawer.right {
     border-inline-start: 1px solid var(--border);
+    --slide-dir: 12px;
   }
 
   @keyframes drawerSlide {
@@ -726,13 +855,6 @@
       opacity: 1;
       transform: translateX(0);
     }
-  }
-
-  .drawer.left {
-    --slide-dir: -12px;
-  }
-  .drawer.right {
-    --slide-dir: 12px;
   }
 
   /* Headers */
@@ -773,14 +895,14 @@
   .drawer-title {
     font-size: 13.5px;
     font-weight: 650;
-    letter-spacing: 0.01em;
+    letter-spacing: -0.01em;
   }
 
   .tab-count-badge {
     font-size: 10.5px;
     padding: 1px 6px;
     border-radius: 999px;
-    background: var(--hover);
+    background: var(--surface-2);
     color: var(--muted);
     font-weight: 600;
   }
@@ -790,6 +912,7 @@
     font-size: 14px;
     padding: 4px;
     border-radius: 4px;
+    transition: background 0.12s ease, color 0.12s ease;
   }
 
   .icon-btn:hover {
@@ -803,19 +926,42 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .filter-input {
-    width: 100%;
-    padding: 5px 9px;
+  .filter-box {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
-    color: var(--text);
-    font-size: 12px;
-    outline: none;
+    transition: border-color 0.15s ease;
   }
 
-  .filter-input:focus {
+  .filter-box:focus-within {
     border-color: var(--accent);
+  }
+
+  .filter-icon {
+    width: 13px;
+    height: 13px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .filter-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .clear-filter {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
   }
 
   /* Settings Navigation */
@@ -831,6 +977,7 @@
     color: var(--muted);
     font-size: 11px;
     font-weight: 500;
+    transition: background 0.12s ease, color 0.12s ease;
   }
 
   .settings-nav button:hover {
@@ -875,17 +1022,7 @@
 
   .tabs-list li.active {
     background: var(--accent-soft);
-  }
-
-  .tabs-list li.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 4px;
-    bottom: 4px;
-    width: 2.5px;
-    border-radius: 2px;
-    background: var(--accent);
+    font-weight: 550;
   }
 
   .tabs-list li.discarded {
@@ -910,6 +1047,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--text);
   }
 
   .favicon {
@@ -920,8 +1058,18 @@
     object-fit: contain;
   }
 
-  .dot {
-    background: var(--border);
+  .favicon-initial {
+    flex: 0 0 15px;
+    width: 15px;
+    height: 15px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .pill {
@@ -932,6 +1080,14 @@
     letter-spacing: 0.04em;
     font-weight: 600;
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .pill-icon {
+    width: 9px;
+    height: 9px;
   }
 
   .pill.audio {
@@ -965,11 +1121,14 @@
     color: #ef4444;
   }
 
-  .empty {
-    padding: 14px 8px;
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px;
     color: var(--muted);
     font-size: 12px;
-    text-align: center;
+    gap: 6px;
   }
 
   /* Footers */
@@ -990,6 +1149,7 @@
     border-radius: 8px;
     color: var(--muted);
     font-size: 12px;
+    transition: border-color 0.15s ease, color 0.15s ease;
   }
 
   .new-tab-btn:hover {
@@ -1004,11 +1164,11 @@
 
   /* Settings Controls */
   .section-title {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 650;
     color: var(--text);
-    margin-bottom: 8px;
-    letter-spacing: 0.01em;
+    margin-bottom: 7px;
+    letter-spacing: -0.01em;
   }
 
   .card {
@@ -1016,15 +1176,17 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
+    box-shadow: var(--shadow-sm);
   }
 
   .stat-card {
     text-align: center;
     padding: 16px;
+    background: radial-gradient(circle at 50% 20%, var(--accent-soft) 0%, var(--surface) 80%);
   }
 
   .stat-big {
-    font-size: 34px;
+    font-size: 36px;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--accent);
@@ -1035,12 +1197,6 @@
     margin-top: 4px;
     color: var(--muted);
     font-size: 11.5px;
-  }
-
-  .card-title {
-    font-size: 12.5px;
-    font-weight: 600;
-    margin-bottom: 4px;
   }
 
   .note {
@@ -1056,18 +1212,29 @@
     justify-content: space-between;
     gap: 12px;
     padding: 8px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-subtle);
     font-size: 12px;
   }
 
-  .field label,
-  .field .key {
+  .field-desc {
+    margin: 2px 0 0;
+    font-size: 10.5px;
     color: var(--muted);
   }
 
-  .field input,
+  .field label {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .field-label-bold {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .field input[type="number"],
   .field select {
-    padding: 4px 6px;
+    padding: 4px 7px;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--panel);
@@ -1076,17 +1243,49 @@
     text-align: right;
   }
 
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 10px 0;
-    font-size: 12px;
-    cursor: pointer;
+  /* iOS/macOS Slider Switch */
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+    flex-shrink: 0;
   }
 
-  .toggle-row input {
-    accent-color: var(--accent);
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--border);
+    transition: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 20px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  input:checked + .slider {
+    background-color: var(--accent);
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(16px);
   }
 
   /* Theme Choices */
@@ -1097,12 +1296,17 @@
 
   .choice-btn {
     flex: 1;
-    padding: 7px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 6px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--text);
     background: var(--surface);
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
 
   .choice-btn.selected {
@@ -1112,9 +1316,13 @@
     font-weight: 600;
   }
 
+  .theme-icon {
+    font-size: 15px;
+  }
+
   .accent-palette {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     padding: 4px 0;
   }
 
@@ -1133,7 +1341,39 @@
 
   .accent-dot.selected {
     border-color: var(--text);
-    transform: scale(1.1);
+    transform: scale(1.12);
+  }
+
+  /* Adblock & Privacy items */
+  .filter-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .filter-item:last-child {
+    border-bottom: none;
+  }
+
+  .filter-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+  }
+
+  .filter-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .filter-desc {
+    font-size: 10.5px;
+    color: var(--muted);
   }
 
   /* Profiles */
@@ -1143,17 +1383,14 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .profile-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 8px;
-    border-radius: 7px;
-    background: var(--surface);
-    border: 1px solid var(--border);
+    padding: 9px 12px;
   }
 
   .profile-item.active-profile {
@@ -1164,143 +1401,239 @@
   .profile-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
 
   .profile-avatar {
-    width: 20px;
-    height: 20px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: var(--accent);
-    color: #fff;
-    font-size: 10px;
+    color: white;
     font-weight: 700;
+    font-size: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .profile-name {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
   }
 
-  .active-tag {
-    font-size: 9px;
-    padding: 1px 4px;
-    border-radius: 4px;
-    background: var(--accent);
-    color: #fff;
+  .profile-badge {
+    font-size: 9.5px;
+    color: var(--accent);
     font-weight: 600;
+    text-transform: uppercase;
   }
 
   .profile-actions {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
   }
 
-  .small-btn {
-    padding: 2px 7px;
+  .action-btn {
+    padding: 4px 8px;
     border-radius: 5px;
-    font-size: 11px;
+    background: var(--surface);
     border: 1px solid var(--border);
-    background: var(--panel);
+    font-size: 11px;
+    font-weight: 500;
   }
 
-  .switch-btn:hover {
+  .action-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
   }
 
-  .del-btn:hover {
-    border-color: #ef4444;
+  .danger-btn {
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: color-mix(in srgb, #ef4444 14%, transparent);
     color: #ef4444;
+    font-size: 11px;
+    font-weight: 600;
+    transition: background 0.12s ease;
   }
 
-  .add-profile-wrap {
+  .danger-btn:hover {
+    background: color-mix(in srgb, #ef4444 24%, transparent);
+  }
+
+  .danger-icon-btn {
+    padding: 3px 6px;
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .danger-icon-btn:hover {
+    color: #ef4444;
+    background: color-mix(in srgb, #ef4444 14%, transparent);
+  }
+
+  .input-action-row {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
+    margin-top: 4px;
   }
 
-  .new-profile-input {
+  .text-input {
     flex: 1;
     padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 12px;
-    background: var(--surface);
+    background: var(--panel);
     color: var(--text);
+    font-size: 12px;
+    outline: none;
   }
 
-  .add-btn {
-    padding: 5px 10px;
+  .text-input:focus {
+    border-color: var(--accent);
+  }
+
+  .primary-btn {
+    padding: 5px 12px;
     border-radius: 6px;
     background: var(--accent);
-    color: #fff;
+    color: white;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
+    transition: opacity 0.15s ease;
   }
 
-  .danger-btn {
-    width: 100%;
-    margin-top: 10px;
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--hover);
-    color: var(--text);
-    font-size: 11.5px;
-    cursor: pointer;
+  .primary-btn:hover {
+    opacity: 0.9;
   }
 
-  .danger-btn:hover {
-    border-color: #ef4444;
-    color: #ef4444;
-  }
-
-  /* Shortcuts List */
-  .shortcut-list {
+  /* Extensions */
+  .extensions-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .ext-card {
+    padding: 10px 12px;
+  }
+
+  .ext-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .ext-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .ext-version {
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: normal;
+  }
+
+  .ext-id {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: monospace;
+    margin-top: 1px;
+  }
+
+  .ext-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ext-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 7px;
+  }
+
+  .badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge.verified {
+    background: color-mix(in srgb, #10b981 18%, transparent);
+    color: #10b981;
+  }
+
+  .badge.partial {
+    background: color-mix(in srgb, #f59e0b 18%, transparent);
+    color: #f59e0b;
+  }
+
+
+
+  .empty-card {
+    text-align: center;
+    padding: 20px;
+  }
+
+  .empty-icon {
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+
+  /* Shortcuts */
+  .shortcut-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .key-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
   }
 
-  .key-row span {
+  /* Tech Info */
+  .tech-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .tech-row:last-child {
+    border-bottom: none;
+  }
+
+  .tech-row span {
     color: var(--muted);
-  }
-
-  kbd {
-    display: inline-block;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    font-family: inherit;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--text);
   }
 
   .quit-btn {
     width: 100%;
     padding: 7px;
     border-radius: 7px;
-    color: var(--muted);
+    background: var(--surface-2);
+    color: #ef4444;
     font-size: 12px;
-    border: 1px solid var(--border);
+    font-weight: 600;
+    transition: background 0.12s ease;
   }
 
   .quit-btn:hover {
-    background: var(--hover);
-    color: #ef4444;
-    border-color: #ef4444;
+    background: color-mix(in srgb, #ef4444 14%, transparent);
   }
 </style>

@@ -22,15 +22,27 @@
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
 
+  const topSites = [
+    { name: 'Google', url: 'https://www.google.com', icon: 'G' },
+    { name: 'GitHub', url: 'https://github.com', icon: 'GH' },
+    { name: 'YouTube', url: 'https://www.youtube.com', icon: 'YT' },
+    { name: 'Reddit', url: 'https://www.reddit.com', icon: 'R' },
+    { name: 'Wikipedia', url: 'https://www.wikipedia.org', icon: 'W' },
+    { name: 'X', url: 'https://x.com', icon: '𝕏' },
+  ];
+
   let isStartPage = $derived(isBlank(activeUrl));
 
   function openBar() {
     focused = true;
     send({ type: 'setOmnibarOpen', open: true });
+    if (!isStartPage && activeUrl) {
+      input = activeUrl;
+    }
     setTimeout(() => {
       inputEl?.focus();
       inputEl?.select();
-    }, 10);
+    }, 15);
   }
 
   function closeBar(focusPage = true) {
@@ -41,6 +53,7 @@
       focused = false;
       send({ type: 'setOmnibarOpen', open: false });
     }
+    input = isBlank(activeUrl) ? '' : displayUrl(activeUrl);
     inputEl?.blur();
     if (focusPage && !isStartPage) {
       send({ type: 'focusPage' });
@@ -196,9 +209,8 @@
       }
     };
     window.addEventListener('keydown', onWindowKey, true);
-    // Autofocus on mount if start page
     if (isStartPage) {
-      setTimeout(() => inputEl?.focus(), 50);
+      setTimeout(() => inputEl?.focus(), 60);
     }
     return () => window.removeEventListener('keydown', onWindowKey, true);
   });
@@ -215,7 +227,9 @@
     <!-- Center Start Page Layout -->
     <div class="start-center">
       <div class="hero-brand">
-        <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
+        <div class="logo-wrapper">
+          <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
+        </div>
         <h1 class="hero-title">Peek</h1>
         <p class="hero-subtitle">Hover to preview. Edge to explore.</p>
       </div>
@@ -270,7 +284,7 @@
                   accept(item);
                 }}
               >
-                <span class="badge">{label(item.kind)}</span>
+                <span class="badge {item.kind}">{label(item.kind)}</span>
                 <span class="text">{item.text}</span>
                 {#if item.detail}
                   <span class="detail">{item.detail}</span>
@@ -281,128 +295,234 @@
         {/if}
       </div>
 
+      <!-- Quick Launch Top Sites -->
+      <div class="top-sites-grid">
+        {#each topSites as site}
+          <button
+            class="site-card"
+            onclick={() => submit(site.url)}
+            title={site.url}
+            type="button"
+          >
+            <div class="site-icon">{site.icon}</div>
+            <span class="site-name">{site.name}</span>
+          </button>
+        {/each}
+      </div>
+
+      <!-- Shortcuts Pill Row -->
       <div class="shortcuts-row">
-        <span class="shortcut-pill"><kbd>⌘ L</kbd> Focus search</span>
-        <span class="shortcut-pill"><kbd>⌘ + Hover</kbd> Live preview</span>
-        <span class="shortcut-pill"><kbd>⌘ ⇧ [</kbd> Tabs drawer</span>
+        <span class="shortcut-pill"><kbd>⌘ L</kbd> Address / Search</span>
+        <span class="shortcut-pill"><kbd>⌘ + Hover</kbd> Live Preview</span>
+        <span class="shortcut-pill"><kbd>⌘ ⇧ [</kbd> Tabs Drawer</span>
         <span class="shortcut-pill"><kbd>⌘ ⇧ ]</kbd> Settings</span>
       </div>
     </div>
   {:else}
-    <!-- Docked Top Bar Layout -->
-    <div class="bar">
-      <button
-        class="logo-btn"
-        title="Open Tabs (Cmd+Shift+[)"
-        type="button"
-        onclick={(e) => {
-          e.stopPropagation();
-          send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-        }}
-      >
-        <img src="/logo.png" alt="Peek" class="bar-logo" />
-      </button>
+    <!-- Docked Minimalist Top Bar -->
+    <div class="bar-container">
+      <div class="bar">
+        <!-- Logo / Tabs Drawer Trigger -->
+        <button
+          class="logo-btn"
+          title="Open Tabs (Cmd+Shift+[)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+          }}
+        >
+          <img src="/logo.png" alt="Peek" class="bar-logo" />
+        </button>
 
-      {#if insecure}
-        <span class="lock" title="This page is not secure" aria-label="Not secure">!</span>
-      {/if}
+        <!-- Navigation Chevrons -->
+        <button
+          class="nav-btn"
+          title="Back (Alt+Left)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'back' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
+            <path d="M10 3.5L5.5 8L10 12.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button
+          class="nav-btn"
+          title="Forward (Alt+Right)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'forward' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
+            <path d="M6 3.5L10.5 8L6 12.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button
+          class="nav-btn reload-btn"
+          title={loading ? "Stop Loading" : "Reload (Cmd+R)"}
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: loading ? 'stop' : 'reload' });
+          }}
+        >
+          {#if loading}
+            <span class="spinner" aria-hidden="true"></span>
+          {:else}
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
+              <path d="M13.5 8A5.5 5.5 0 1 1 12 4.1L13.5 2.5V6.5H9.5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          {/if}
+        </button>
 
-      <input
-        bind:this={inputEl}
-        bind:value={input}
-        oninput={onInput}
-        onkeydown={onKeydown}
-        onfocus={() => {
-          focused = true;
-          send({ type: 'setOmnibarOpen', open: true });
-        }}
-        placeholder="Search or enter address"
-        spellcheck="false"
-        autocomplete="off"
-        autocapitalize="off"
-        aria-label="Address and search"
-      />
+        <!-- Security Lock Indicator -->
+        {#if insecure}
+          <span class="lock-pill insecure" title="Connection is not secure (HTTP)" aria-label="Not secure">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="lock-icon">
+              <path d="M8 3.5v5M8 11.5v.5" stroke-width="1.8" stroke-linecap="round" />
+              <circle cx="8" cy="8" r="6.5" stroke-width="1.4" />
+            </svg>
+          </span>
+        {:else}
+          <span class="lock-pill secure" title="Connection is secure (HTTPS)" aria-label="Secure">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="lock-icon">
+              <path d="M4.5 7V4.5a3.5 3.5 0 0 1 7 0V7M3.5 7h9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-5A1.5 1.5 0 0 1 3.5 7z" stroke-width="1.4" />
+            </svg>
+          </span>
+        {/if}
 
-      {#if loading}
-        <span class="spinner" aria-hidden="true"></span>
-      {/if}
+        <!-- Main Input Field -->
+        <input
+          bind:this={inputEl}
+          bind:value={input}
+          oninput={onInput}
+          onkeydown={onKeydown}
+          onfocus={() => {
+            focused = true;
+            send({ type: 'setOmnibarOpen', open: true });
+            if (activeUrl && !isBlank(activeUrl)) {
+              input = activeUrl;
+            }
+          }}
+          placeholder="Search or enter address"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          aria-label="Address and search"
+        />
 
-      <button
-        class="settings-btn"
-        title="Settings (Cmd+Shift+])"
-        type="button"
-        onclick={(e) => {
-          e.stopPropagation();
-          send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-        }}
-      >
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" class="gear-icon">
-          <circle cx="10" cy="10" r="3" stroke-width="1.6" />
-          <path
-            d="M10 2.5V4.5M10 15.5V17.5M2.5 10H4.5M15.5 10H17.5M4.7 4.7L6.1 6.1M13.9 13.9L15.3 15.3M4.7 15.3L6.1 13.9M13.9 6.1L15.3 4.7"
-            stroke-width="1.6"
-            stroke-linecap="round"
-          />
-        </svg>
-      </button>
-    </div>
-
-    {#if focused && suggestions.length}
-      <div class="panel" role="listbox">
-        {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
+        {#if input && focused}
           <button
-            class="item"
-            class:selected={index === selected}
-            role="option"
-            aria-selected={index === selected}
-            onmousedown={(event) => {
-              event.preventDefault();
-              accept(item);
+            class="bar-clear-btn"
+            type="button"
+            onclick={() => {
+              input = '';
+              suggestions = [];
+              inputEl?.focus();
             }}
+            title="Clear"
           >
-            <span class="badge">{label(item.kind)}</span>
-            <span class="text">{item.text}</span>
-            {#if item.detail}
-              <span class="detail">{item.detail}</span>
-            {/if}
+            ×
           </button>
-        {/each}
+        {/if}
+
+        <!-- Shield / Privacy Button -->
+        <button
+          class="tool-btn shield-btn"
+          title="Adblock & Privacy Filters"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'blocking' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <path d="M8 1.5L2.5 3.8v4.2c0 3.7 2.3 6.3 5.5 7 3.2-.7 5.5-3.3 5.5-7V3.8L8 1.5z" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <!-- Settings Button -->
+        <button
+          class="tool-btn settings-btn"
+          title="Settings (Cmd+Shift+])"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+          }}
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" class="tool-icon gear-icon">
+            <circle cx="10" cy="10" r="3" stroke-width="1.6" />
+            <path
+              d="M10 2.5V4.5M10 15.5V17.5M2.5 10H4.5M15.5 10H17.5M4.7 4.7L6.1 6.1M13.9 13.9L15.3 15.3M4.7 15.3L6.1 13.9M13.9 6.1L15.3 4.7"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
       </div>
-    {/if}
+
+      <!-- Docked Suggestions Dropdown -->
+      {#if focused && suggestions.length}
+        <div class="panel" role="listbox">
+          {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
+            <button
+              class="item"
+              class:selected={index === selected}
+              role="option"
+              aria-selected={index === selected}
+              onmousedown={(event) => {
+                event.preventDefault();
+                accept(item);
+              }}
+            >
+              <span class="badge {item.kind}">{label(item.kind)}</span>
+              <span class="text">{item.text}</span>
+              {#if item.detail}
+                <span class="detail">{item.detail}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
   .root {
-    position: fixed;
-    inset: 0;
-    background: transparent;
-    transition: background 0.22s ease-out;
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+    pointer-events: none;
   }
 
-  .root.start-page {
-    background: var(--bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .root.start-page,
+  .root.open {
+    pointer-events: auto;
   }
 
-  /* Centered Start Page */
+  /* Center Start Page Layout */
   .start-center {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 100%;
-    max-width: 580px;
-    padding: 0 20px;
-    margin-top: -6vh;
-    animation: fadeIn 0.24s cubic-bezier(0.2, 0, 0, 1);
+    justify-content: center;
+    min-height: 100vh;
+    padding: 32px 24px;
+    background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 60%);
+    animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(12px) scale(0.98);
+      transform: translateY(10px) scale(0.99);
     }
     to {
       opacity: 1;
@@ -414,76 +534,92 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+  }
+
+  .logo-wrapper {
+    position: relative;
+    margin-bottom: 14px;
+  }
+
+  .logo-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 20px;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    filter: blur(10px);
+    z-index: 0;
+    opacity: 0.6;
   }
 
   .hero-logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 14px;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
-    margin-bottom: 12px;
-    transition: transform 0.25s ease;
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    z-index: 1;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hero-logo:hover {
-    transform: scale(1.05) rotate(1deg);
+    transform: scale(1.06) rotate(1deg);
   }
 
   .hero-title {
     margin: 0;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     color: var(--text);
   }
 
   .hero-subtitle {
-    margin: 4px 0 0;
-    font-size: 13px;
+    margin: 6px 0 0;
+    font-size: 13.5px;
     color: var(--muted);
     letter-spacing: 0.01em;
   }
 
   .search-box {
     width: 100%;
+    max-width: 580px;
     position: relative;
-    border-radius: 14px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+    border-radius: var(--radius-lg);
     background: var(--panel);
     border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .search-box:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28), 0 0 0 2px var(--accent-soft);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.25), 0 0 0 2.5px var(--accent-soft);
   }
 
   .search-input-wrap {
     display: flex;
     align-items: center;
-    height: 48px;
+    height: 50px;
     padding: 0 16px;
     gap: 12px;
   }
 
   .search-icon {
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
     color: var(--muted);
     flex-shrink: 0;
   }
 
   .search-input-wrap input {
     flex: 1;
-    min-width: 0;
-    height: 100%;
     border: none;
     outline: none;
     background: transparent;
     color: var(--text);
-    font-size: 15px;
+    font-size: 14.5px;
     letter-spacing: 0.01em;
   }
 
@@ -492,34 +628,43 @@
   }
 
   .clear-btn {
-    font-size: 18px;
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
     color: var(--muted);
-    padding: 4px 8px;
-    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .clear-btn:hover {
-    color: var(--text);
     background: var(--hover);
+    color: var(--text);
   }
 
   .start-suggestions {
     border-top: 1px solid var(--border);
     padding: 6px;
-    max-height: 260px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .suggest-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
     padding: 9px 12px;
     border-radius: 8px;
     text-align: left;
     font-size: 13.5px;
     cursor: pointer;
+    transition: background 0.12s ease;
   }
 
   .suggest-item.selected,
@@ -527,12 +672,61 @@
     background: var(--hover);
   }
 
+  /* Top Sites Grid */
+  .top-sites-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    max-width: 580px;
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .site-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 6px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: transform 0.18s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .site-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .site-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+
+  .site-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
   .shortcuts-row {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-top: 22px;
+    margin-top: 28px;
     flex-wrap: wrap;
   }
 
@@ -542,8 +736,8 @@
     gap: 6px;
     font-size: 11.5px;
     color: var(--muted);
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 5px 9px;
+    border-radius: 7px;
     background: color-mix(in srgb, var(--surface) 60%, transparent);
     border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   }
@@ -562,25 +756,32 @@
   }
 
   /* Docked Top Bar */
+  .bar-container {
+    width: 100%;
+    pointer-events: auto;
+  }
+
   .bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     height: 30px;
     margin: 3px 10px;
-    padding: 0 11px;
+    padding: 0 8px;
     border: 1px solid var(--border);
     border-radius: 9px;
-    background: var(--panel);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1), border-color 0.15s ease;
-    animation: dockSlide 0.22s cubic-bezier(0.2, 0, 0, 1);
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease, box-shadow 0.15s ease;
+    animation: dockSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes dockSlide {
     from {
-      opacity: 0.6;
-      transform: translateY(-8px);
+      opacity: 0.7;
+      transform: translateY(-6px);
     }
     to {
       opacity: 1;
@@ -589,7 +790,8 @@
   }
 
   .bar:focus-within {
-    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+    border-color: var(--accent);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18), 0 0 0 2px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .logo-btn {
@@ -600,23 +802,75 @@
     cursor: pointer;
     flex-shrink: 0;
     padding: 2px;
-    margin-left: -3px;
+    margin-right: 2px;
     border-radius: 4px;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease, opacity 0.15s ease;
   }
 
   .logo-btn:hover {
-    opacity: 0.85;
     transform: scale(1.08);
+    opacity: 0.9;
   }
 
   .bar-logo {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
     border-radius: 4px;
     display: block;
     user-select: none;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .nav-btn {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+
+  .nav-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .nav-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .reload-btn {
+    margin-right: 2px;
+  }
+
+  .lock-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+
+  .lock-pill.secure {
+    color: #10b981;
+  }
+
+  .lock-pill.insecure {
+    color: #f59e0b;
+  }
+
+  .lock-icon {
+    width: 12px;
+    height: 12px;
   }
 
   .bar input {
@@ -627,52 +881,66 @@
     outline: none;
     background: transparent;
     color: var(--text);
-    font-size: 13px;
+    font-size: 12.5px;
     letter-spacing: 0.01em;
+    padding: 0 4px;
   }
 
   .bar input::placeholder {
     color: var(--muted);
   }
 
-  .settings-btn {
+  .bar-clear-btn {
     all: unset;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 13px;
     cursor: pointer;
     flex-shrink: 0;
-    padding: 2px;
-    color: var(--muted);
-    border-radius: 4px;
-    transition: color 0.15s ease;
+    margin-right: 4px;
   }
 
-  .settings-btn:hover {
+  .bar-clear-btn:hover {
+    background: var(--hover);
     color: var(--text);
   }
 
-  .gear-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  .lock {
-    display: inline-flex;
+  .tool-btn {
+    all: unset;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 15px;
-    height: 15px;
-    border-radius: 50%;
-    background: color-mix(in srgb, #d97706 22%, transparent);
-    color: #b45309;
-    font-size: 10px;
-    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+
+  .tool-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .tool-icon {
+    width: 13.5px;
+    height: 13.5px;
+  }
+
+  .shield-btn:hover {
+    color: var(--accent);
   }
 
   .spinner {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
     border: 1.5px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
@@ -685,16 +953,19 @@
     }
   }
 
+  /* Docked Panel Dropdown */
   .panel {
     max-height: 280px;
-    margin: 6px 10px 0;
+    margin: 5px 10px 0;
     padding: 4px;
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     box-shadow: var(--shadow);
-    animation: panelPop 0.15s cubic-bezier(0.2, 0, 0, 1);
+    animation: panelPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes panelPop {
@@ -717,6 +988,8 @@
     border-radius: 7px;
     text-align: left;
     font-size: 12.5px;
+    cursor: pointer;
+    transition: background 0.1s ease;
   }
 
   .item.selected,
@@ -725,12 +998,21 @@
   }
 
   .badge {
-    flex: 0 0 54px;
+    flex: 0 0 52px;
     color: var(--muted);
     font-size: 9.5px;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    text-align: center;
+  }
+
+  .badge.tab {
+    color: var(--accent);
+    background: var(--accent-soft);
   }
 
   .text {
@@ -739,6 +1021,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--text);
   }
 
   .detail {
@@ -749,5 +1032,6 @@
     white-space: nowrap;
     color: var(--muted);
     font-size: 11px;
+    text-align: right;
   }
 </style>
