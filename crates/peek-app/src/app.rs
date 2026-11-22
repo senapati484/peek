@@ -13,7 +13,7 @@ use peek_engine::{
     Bounds, Engine, EngineEvents, LoadEvent, WebViewId, WebViewOptions, WryEngine,
 };
 use peek_ipc::{
-    Command, EdgeSide, Envelope, Event, PageEvent, Shortcut, Suggestion, SuggestionKind, TabId,
+    Command, EdgeSide, Envelope, Event, ExtensionSummary, PageEvent, Shortcut, Suggestion, SuggestionKind, TabId,
 };
 use peek_preview::{PreviewAction, PreviewConfig, PreviewController};
 use peek_store::{Session, Store};
@@ -501,6 +501,10 @@ impl App {
             Command::CreateProfile { name } => self.create_profile(&name),
             Command::SwitchProfile { name } => self.switch_profile(&name),
             Command::DeleteProfile { name } => self.delete_profile(&name),
+            Command::InstallExtension { path } => self.install_extension_path(&path),
+            Command::ToggleExtension { id, enabled } => self.toggle_extension(&id, enabled),
+            Command::UninstallExtension { id } => self.uninstall_extension(&id),
+            Command::GetExtensions => self.send_extensions_list(),
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -889,6 +893,8 @@ impl App {
                     side: Some(side),
                     section: section.map(str::to_string),
                 });
+                self.send_profiles_list();
+                self.send_extensions_list();
             }
             return;
         }
@@ -927,6 +933,8 @@ impl App {
                     side: Some(side),
                     section: Some(section_param.to_string()),
                 });
+                self.send_profiles_list();
+                self.send_extensions_list();
             }
             Err(error) => eprintln!("peek: failed to open drawer: {error}"),
         }
@@ -1174,6 +1182,80 @@ impl App {
         }
     }
 
+    fn send_extensions_list(&self) {
+        let extensions = self
+            .extensions
+            .extensions
+            .iter()
+            .map(|e| ExtensionSummary {
+                id: e.id.clone(),
+                name: e.name.clone(),
+                version: e.version.clone(),
+                description: e.description.clone(),
+                enabled: e.enabled,
+                fully_supported: e.report.is_fully_supported(),
+            })
+            .collect();
+        self.send(Event::ExtensionsList { extensions });
+    }
+
+    fn install_extension_path(&mut self, path: &str) {
+        let p = std::path::Path::new(path);
+        if !p.exists() {
+            self.send(Event::Toast {
+                message: format!("Extension path not found: {path}"),
+            });
+            return;
+        }
+
+        let extensions_dir = self.profile_dir.join("extensions");
+        let result = if p.is_dir() {
+            peek_ext::ExtensionRegistry::install_from_folder(p, &extensions_dir)
+        } else if let Ok(bytes) = std::fs::read(p) {
+            peek_ext::ExtensionRegistry::install_from_bytes(&bytes, &extensions_dir)
+        } else {
+            self.send(Event::Toast {
+                message: "Could not read extension file".into(),
+            });
+            return;
+        };
+
+        match result {
+            Ok(ext) => {
+                let name = ext.name.clone();
+                self.extensions.extensions.retain(|e| e.id != ext.id);
+                self.extensions.extensions.push(ext);
+                self.send(Event::Toast {
+                    message: format!("Installed extension: {name}"),
+                });
+                self.send_extensions_list();
+            }
+            Err(err) => {
+                self.send(Event::Toast {
+                    message: format!("Failed to install: {err}"),
+                });
+            }
+        }
+    }
+
+    fn toggle_extension(&mut self, id: &str, enabled: bool) {
+        if let Some(ext) = self.extensions.extensions.iter_mut().find(|e| e.id == id) {
+            ext.enabled = enabled;
+            self.send_extensions_list();
+        }
+    }
+
+    fn uninstall_extension(&mut self, id: &str) {
+        if let Some(pos) = self.extensions.extensions.iter().position(|e| e.id == id) {
+            let ext = self.extensions.extensions.remove(pos);
+            let _ = std::fs::remove_dir_all(&ext.dir);
+            self.send(Event::Toast {
+                message: format!("Removed {}", ext.name),
+            });
+            self.send_extensions_list();
+        }
+    }
+
     fn suggestions(&self, query: &str) -> Vec<Suggestion> {
         let mut items: Vec<Suggestion> = Vec::new();
         let q = query.trim();
@@ -1243,6 +1325,7 @@ impl App {
         self.send_settings();
         self.send_cookies_count();
         self.send_profiles_list();
+        self.send_extensions_list();
     }
 
     fn send_cookies_count(&self) {

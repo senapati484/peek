@@ -5,6 +5,7 @@
     requestState,
     send,
     type EdgeSide,
+    type ExtensionSummary,
     type PeekEvent,
     type TabInfo,
   } from './ipc';
@@ -35,6 +36,10 @@
   let profiles = $state<string[]>(['default']);
   let activeProfile = $state('default');
   let newProfileName = $state('');
+
+  // Extensions
+  let extensions = $state<ExtensionSummary[]>([]);
+  let extensionInstallPath = $state('');
 
   // Appearance & Theme
   let themeMode = $state<'system' | 'dark' | 'light'>('system');
@@ -112,6 +117,13 @@
     }
   }
 
+  function handleInstallExtension() {
+    const trimmed = extensionInstallPath.trim();
+    if (!trimmed) return;
+    send({ type: 'installExtension', path: trimmed });
+    extensionInstallPath = '';
+  }
+
   function handleEvent(event: PeekEvent): void {
     switch (event.type) {
       case 'tabsChanged':
@@ -155,6 +167,9 @@
       case 'profilesList':
         profiles = event.profiles;
         activeProfile = event.active;
+        break;
+      case 'extensionsList':
+        extensions = event.extensions;
         break;
       default:
         break;
@@ -552,13 +567,72 @@
       {:else if section === 'extensions'}
         <div class="section-title">Chrome Extension Support</div>
         <p class="note" style="margin-bottom: 12px;">
-          Import Manifest V3 extensions via unpacked folder or <code>.crx</code> package.
+          Import Manifest V3 extensions via unpacked directory or <code>.crx</code> package.
         </p>
-        <div class="card">
+
+        <div class="add-profile-wrap" style="margin-bottom: 14px;">
+          <input
+            type="text"
+            bind:value={extensionInstallPath}
+            placeholder="Path to folder or .crx..."
+            class="new-profile-input"
+            onkeydown={(e) => { if (e.key === 'Enter') handleInstallExtension(); }}
+          />
+          <button class="add-btn" onclick={handleInstallExtension}>Install</button>
+        </div>
+
+        {#if extensions.length === 0}
+          <div class="card" style="text-align: center; padding: 16px;">
+            <div class="stat-label">No extensions installed</div>
+            <p class="note" style="margin-top: 4px;">Enter a path above to install a Manifest V3 extension.</p>
+          </div>
+        {:else}
+          <ul class="profile-list">
+            {#each extensions as ext}
+              <li class="profile-item" style="flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <strong style="font-size: 12.5px;">{ext.name}</strong>
+                    <span style="font-size: 10px; color: var(--muted);">v{ext.version}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <label class="toggle-row" style="margin: 0;">
+                      <input
+                        type="checkbox"
+                        checked={ext.enabled}
+                        onchange={(e) => send({ type: 'toggleExtension', id: ext.id, enabled: (e.currentTarget as HTMLInputElement).checked })}
+                      />
+                    </label>
+                    <button class="small-btn del-btn" title="Uninstall" onclick={() => send({ type: 'uninstallExtension', id: ext.id })}>
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                {#if ext.description}
+                  <div style="font-size: 11px; color: var(--muted); line-height: 1.3;">{ext.description}</div>
+                {/if}
+                <div>
+                  {#if ext.fullySupported}
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.18); color: #10b981; font-size: 9.5px; padding: 2px 6px; border-radius: 4px;">
+                      Tier 1 Verified
+                    </span>
+                  {:else}
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b; font-size: 9.5px; padding: 2px 6px; border-radius: 4px;">
+                      Partial MV3
+                    </span>
+                  {/if}
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        <div class="card" style="margin-top: 14px;">
           <div class="card-title">Manifest V3 Compatibility</div>
           <p class="note">
-            • Tier 1: <code>storage</code>, <code>runtime</code>, <code>tabs</code>, <code>scripting</code>, <code>action</code>, <code>alarms</code>.<br />
-            • Tier 2: <code>cookies</code>, <code>history</code>, <code>bookmarks</code>.
+            • <strong>Tier 1 Supported:</strong> <code>storage</code>, <code>runtime</code>, <code>tabs</code>, <code>scripting</code>, <code>action</code>, <code>alarms</code>.<br />
+            • <strong>Tier 2 Partial:</strong> <code>cookies</code>, <code>history</code>, <code>bookmarks</code>.<br />
+            • <strong>Unsupported:</strong> blocking <code>webRequest</code>, DevTools, <code>nativeMessaging</code>.
           </p>
         </div>
 

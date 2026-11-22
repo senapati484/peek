@@ -1,5 +1,14 @@
 export type EdgeSide = 'left' | 'right';
 
+export type ExtensionSummary = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  enabled: boolean;
+  fullySupported: boolean;
+};
+
 export type TabInfo = {
   id: number;
   url: string;
@@ -41,6 +50,7 @@ export type PeekEvent =
   | { type: 'profileChanged'; name: string }
   | { type: 'profilesList'; profiles: string[]; active: string }
   | { type: 'cookiesCount'; count: number }
+  | { type: 'extensionsList'; extensions: ExtensionSummary[] }
   | {
       type: 'settings';
       maxLive: number;
@@ -75,6 +85,10 @@ export type PeekCommand =
   | { type: 'createProfile'; name: string }
   | { type: 'switchProfile'; name: string }
   | { type: 'deleteProfile'; name: string }
+  | { type: 'installExtension'; path: string }
+  | { type: 'toggleExtension'; id: string; enabled: boolean }
+  | { type: 'uninstallExtension'; id: string }
+  | { type: 'getExtensions' }
   | { type: 'clearCookies' }
   | { type: 'getCookies' }
   | { type: 'quit' };

@@ -133,6 +133,14 @@ pub enum Command {
     SwitchProfile { name: String },
     /// Delete a profile.
     DeleteProfile { name: String },
+    /// Install an extension from a local directory or .crx file path.
+    InstallExtension { path: String },
+    /// Enable or disable an installed extension.
+    ToggleExtension { id: String, enabled: bool },
+    /// Remove an installed extension.
+    UninstallExtension { id: String },
+    /// Request installed extensions list.
+    GetExtensions,
     Quit,
 }
 
@@ -202,6 +210,20 @@ pub enum Event {
     CookiesCount {
         count: usize,
     },
+    ExtensionsList {
+        extensions: Vec<ExtensionSummary>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionSummary {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub enabled: bool,
+    pub fully_supported: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
