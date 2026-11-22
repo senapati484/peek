@@ -285,11 +285,48 @@
   role="presentation"
 >
   {#if isStartPage}
-    <!-- Center Start Page Layout: Logo + Search Bar Simple -->
+    <!-- Center Start Page Layout: Responsive Search Bar + Clean Corner Affordances -->
     <div class="start-center">
       {#if !drawerOpen}
-        <!-- Profile Badge in Top Corner -->
-        <div class="start-profile-corner">
+        <!-- Left Corner: Quick Tabs Affordance -->
+        <div class="start-corner left">
+          <button
+            class="start-corner-pill"
+            title="Open Tabs (or hover left edge) • ⌘⇧["
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+            }}
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
+              <rect x="2" y="2.5" width="12" height="11" rx="2" stroke-width="1.3" />
+              <path d="M6 2.5v11" stroke-width="1.3" />
+            </svg>
+            <span class="corner-text">Tabs</span>
+            <kbd class="corner-kbd">⌘⇧[</kbd>
+          </button>
+        </div>
+
+        <!-- Right Corner: Quick Settings & Profile Affordances -->
+        <div class="start-corner right">
+          <button
+            class="start-corner-pill"
+            title="Open Settings & Tools (or hover right edge) • ⌘⇧]"
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+            }}
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
+              <circle cx="8" cy="8" r="2.5" stroke-width="1.3" />
+              <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+            <span class="corner-text">Settings</span>
+            <kbd class="corner-kbd">⌘⇧]</kbd>
+          </button>
+
           <button
             class="start-profile-chip"
             title={`Active Profile: ${activeProfile} (Click to switch)`}
@@ -303,6 +340,31 @@
             <span class="profile-chip-name">{activeProfile}</span>
           </button>
         </div>
+
+        <!-- Left & Right Edge Touchpoint Indicators -->
+        <button
+          class="edge-hover-indicator left"
+          title="Hover left edge to view Tabs"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+          }}
+        >
+          <span class="edge-indicator-bar"></span>
+        </button>
+
+        <button
+          class="edge-hover-indicator right"
+          title="Hover right edge to view Settings"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+          }}
+        >
+          <span class="edge-indicator-bar"></span>
+        </button>
       {/if}
 
       <div class="hero-brand">
@@ -587,13 +649,127 @@
     animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .start-profile-corner {
+  /* Corner Affordances: Tabs (Left) and Settings & Profile (Right) */
+  .start-corner {
     position: absolute;
-    top: 18px;
-    right: 24px;
+    top: 20px;
     display: flex;
     align-items: center;
-    z-index: 10;
+    gap: 8px;
+    z-index: 20;
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .start-corner.left {
+    left: 24px;
+  }
+
+  .start-corner.right {
+    right: 24px;
+  }
+
+  .start-corner-pill {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px 5px 10px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: all 0.16s ease;
+  }
+
+  .start-corner-pill:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .corner-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+    transition: color 0.15s ease;
+  }
+
+  .start-corner-pill:hover .corner-icon {
+    color: var(--accent);
+  }
+
+  .corner-text {
+    letter-spacing: -0.01em;
+  }
+
+  .corner-kbd {
+    all: unset;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--border-subtle);
+    margin-left: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  .start-corner-pill:hover .corner-kbd {
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  /* Edge touchpoint indicators */
+  .edge-hover-indicator {
+    all: unset;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 15;
+    opacity: 0.4;
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .edge-hover-indicator.left {
+    left: 2px;
+  }
+
+  .edge-hover-indicator.right {
+    right: 2px;
+  }
+
+  .edge-hover-indicator:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.3);
+  }
+
+  .edge-indicator-bar {
+    width: 3.5px;
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--border);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .edge-hover-indicator:hover .edge-indicator-bar {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
   }
 
   .start-profile-chip {
@@ -675,38 +851,39 @@
     transform: scale(1.05);
   }
 
-  /* Sleek Compact Pill Search Bar */
+  /* Sleek, Prominent Responsive Search Box */
   .search-box {
     width: 100%;
-    max-width: 360px;
+    max-width: min(620px, calc(100vw - 48px));
     position: relative;
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .search-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+    border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 14px 40px rgba(0, 0, 0, 0.6), var(--shadow);
     background: var(--panel);
+    transform: translateY(-1px);
   }
 
   .search-input-wrap {
     display: flex;
     align-items: center;
-    height: 38px;
-    padding: 0 14px;
-    gap: 10px;
+    height: 48px;
+    padding: 0 18px;
+    gap: 12px;
     border-radius: 9999px;
   }
 
   .search-icon {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
     color: var(--muted);
     flex-shrink: 0;
     transition: color 0.15s ease;
@@ -723,7 +900,8 @@
     outline: none;
     background: transparent;
     color: var(--text);
-    font-size: 13.5px;
+    font-size: 15px;
+    font-weight: 450;
     letter-spacing: -0.01em;
   }
 
@@ -732,13 +910,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 16px;
+    line-height: 1;
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: all 0.15s ease;
   }
 
   .clear-btn:hover {
@@ -748,20 +927,32 @@
 
   .start-suggestions {
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 10px);
     left: 0;
     right: 0;
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: 18px;
     background: var(--panel);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    padding: 6px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     z-index: 50;
+    animation: dropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes dropdownFade {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.995);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .suggest-item {
@@ -769,12 +960,19 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 9px 13px;
+    border-radius: 10px;
     text-align: left;
-    font-size: 13px;
+    font-size: 13.5px;
     cursor: pointer;
     transition: background 0.12s ease;
+    border: none;
+    background: transparent;
+  }
+
+  .suggest-item.selected,
+  .suggest-item:hover {
+    background: var(--hover);
   }
 
   .suggest-item.selected,
@@ -1049,21 +1247,37 @@
   }
 
   .badge {
-    flex: 0 0 52px;
+    flex: 0 0 auto;
+    min-width: 52px;
     color: var(--muted);
     font-size: 9.5px;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    padding: 1px 4px;
-    border-radius: 4px;
+    padding: 2px 6px;
+    border-radius: 5px;
     background: var(--surface-2);
     text-align: center;
   }
 
   .badge.tab {
     color: var(--accent);
-    background: var(--accent-soft);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  .badge.bookmark {
+    color: #a855f7;
+    background: color-mix(in srgb, #a855f7 18%, transparent);
+  }
+
+  .badge.history {
+    color: var(--muted);
+    background: var(--surface-2);
+  }
+
+  .badge.search {
+    color: #10b981;
+    background: color-mix(in srgb, #10b981 18%, transparent);
   }
 
   .text {
@@ -1073,16 +1287,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
+    font-weight: 450;
   }
 
   .detail {
-    flex: 0 1 38%;
+    flex: 0 1 auto;
+    max-width: 260px;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 11.5px;
     text-align: right;
+    margin-left: auto;
   }
 </style>
