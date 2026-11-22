@@ -27,8 +27,22 @@ use crate::assets::{PageAssets, UiAssets};
 use crate::inject;
 
 pub const BAR_HEIGHT: f64 = 36.0;
-pub const DEFAULT_USER_AGENT: &str =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15";
+
+pub fn default_user_agent() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+    }
+}
+
 const PREVIEW_HIDE_GRACE: Duration = Duration::from_millis(300);
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
 const IDLE_TICK_EVERY: u64 = 240;
@@ -359,6 +373,14 @@ impl App {
                     };
                     if is_subframe_or_widget_url(&clean_url) {
                         return;
+                    }
+                    // Prevent intermediate WebKit about:blank events from wiping out real tab URLs
+                    if peek_core::url::is_blank(&clean_url) {
+                        if let Some(existing) = self.tabs.tab(tab) {
+                            if !peek_core::url::is_blank(&existing.url) {
+                                return;
+                            }
+                        }
                     }
                     self.tabs.set_url(tab, &clean_url);
                     self.send(Event::UrlChanged {
@@ -1053,6 +1075,11 @@ impl App {
             self.settings.edge_zone,
         );
         let is_blank = peek_core::url::is_blank(url);
+        let data_store_identifier = if self.current_profile_name == "default" {
+            None
+        } else {
+            Some(self.profile_uuid)
+        };
         let view = self.engine.create(
             &self.window,
             WebViewOptions {
@@ -1063,9 +1090,9 @@ impl App {
                 initialization_scripts: vec![script],
                 accept_first_mouse: true,
                 data_directory: Some(self.profile_web_data_dir.clone()),
-                data_store_identifier: Some(self.profile_uuid),
+                data_store_identifier,
                 incognito: false,
-                user_agent: Some(DEFAULT_USER_AGENT.to_string()),
+                user_agent: Some(default_user_agent().to_string()),
                 ..Default::default()
             },
         )?;
@@ -1216,7 +1243,7 @@ impl App {
                 devtools: false,
                 initialization_scripts: vec![script],
                 zoom: Some(zoom),
-                user_agent: Some(DEFAULT_USER_AGENT.to_string()),
+                user_agent: Some(default_user_agent().to_string()),
                 corner_radius: Some(14.0),
                 border_width: Some(1.5),
                 border_color: Some([0.35, 0.55, 0.95, 0.65]),

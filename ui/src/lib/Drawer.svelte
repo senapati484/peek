@@ -99,6 +99,19 @@
       : tabs
   );
 
+  let keyboardSelectedIndex = $state(-1);
+  let keyboardSelectedTabId = $derived(
+    keyboardSelectedIndex >= 0 && keyboardSelectedIndex < filteredTabs.length
+      ? filteredTabs[keyboardSelectedIndex].id
+      : null
+  );
+
+  $effect(() => {
+    // Reset selection when filter text changes
+    filterText;
+    keyboardSelectedIndex = -1;
+  });
+
   let pinnedTabs = $derived(filteredTabs.filter((t) => t.pinned));
   let regularTabs = $derived(filteredTabs.filter((t) => !t.pinned));
 
@@ -272,8 +285,33 @@
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        close();
+        if (filterText) {
+          filterText = '';
+        } else {
+          close();
+        }
         return;
+      }
+      if (currentSide === 'left') {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          if (filteredTabs.length > 0) {
+            keyboardSelectedIndex = (keyboardSelectedIndex + 1) % filteredTabs.length;
+          }
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          if (filteredTabs.length > 0) {
+            keyboardSelectedIndex = (keyboardSelectedIndex - 1 + filteredTabs.length) % filteredTabs.length;
+          }
+          return;
+        }
+        if (event.key === 'Enter' && keyboardSelectedTabId != null) {
+          event.preventDefault();
+          switchTo(keyboardSelectedTabId);
+          return;
+        }
       }
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
@@ -395,6 +433,7 @@
             <li
               class:active={tab.id === activeTabId}
               class:discarded={tab.discarded}
+              class:keyboard-selected={tab.id === keyboardSelectedTabId}
               class="is-pinned-tab"
             >
               <button
@@ -464,6 +503,7 @@
           <li
             class:active={tab.id === activeTabId}
             class:discarded={tab.discarded}
+            class:keyboard-selected={tab.id === keyboardSelectedTabId}
             draggable="true"
             ondragstart={(e) => onDragStart(e, tab.id)}
             ondragover={(e) => e.preventDefault()}
@@ -1367,6 +1407,11 @@
 
   .tabs-list li.discarded {
     opacity: 0.65;
+  }
+
+  .tabs-list li.keyboard-selected .tab-row {
+    background: var(--accent-soft);
+    border-color: var(--accent);
   }
 
   .tab-row {

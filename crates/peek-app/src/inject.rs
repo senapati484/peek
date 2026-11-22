@@ -138,6 +138,8 @@ const PAGE_SCRIPT: &str = r##"
     ];
     function isAdUrl(u) {
       if (!u || typeof u !== "string") return false;
+      var host = (location.hostname || "").toLowerCase();
+      if (host === "accounts.google.com" || host.endsWith(".accounts.google.com") || host.indexOf("myaccount.google.") >= 0) return false;
       for (var i = 0; i < AD_PATTERNS.length; i++) {
         if (AD_PATTERNS[i].test(u)) return true;
       }

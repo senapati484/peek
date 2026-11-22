@@ -16,6 +16,7 @@
   let focused = $state(false);
   let suggestions = $state<Suggestion[]>([]);
   let selected = $state(-1);
+  let originalQuery = $state('');
   let activeId = $state<number | null>(null);
   let activeUrl = $state('about:blank');
   let activeTitle = $state('');
@@ -132,6 +133,12 @@
           insecure = active.url.startsWith('http://');
           if (!focused) {
             input = isBlank(active.url) ? '' : displayUrl(active.url);
+          }
+          if (isBlank(active.url)) {
+            setTimeout(() => {
+              inputEl?.focus();
+              inputEl?.select();
+            }, 30);
           }
         }
         break;
@@ -271,14 +278,30 @@
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       if (suggestions.length) {
+        if (selected === -1) {
+          originalQuery = input;
+        }
         selected = (selected + 1) % suggestions.length;
+        const item = suggestions[selected];
+        if (item) {
+          input = item.url ?? item.text;
+        }
       }
       return;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       if (suggestions.length) {
-        selected = (selected - 1 + suggestions.length) % suggestions.length;
+        if (selected <= 0) {
+          selected = -1;
+          input = originalQuery;
+        } else {
+          selected = selected - 1;
+          const item = suggestions[selected];
+          if (item) {
+            input = item.url ?? item.text;
+          }
+        }
       }
       return;
     }
@@ -1588,6 +1611,7 @@
 
   /* Docked Top Bar: Clean Full-Width Toolbar */
   .bar-container {
+    position: relative;
     width: 100%;
     height: 36px;
     background: var(--surface);
@@ -1830,8 +1854,12 @@
 
   /* Docked Panel Dropdown */
   .panel {
+    position: absolute;
+    top: 38px;
+    left: 10px;
+    right: 10px;
     max-height: 280px;
-    margin: 5px 10px 0;
+    margin: 0;
     padding: 4px;
     overflow-y: auto;
     border: 1px solid var(--border);
@@ -1839,7 +1867,8 @@
     background: color-mix(in srgb, var(--panel) 96%, transparent);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    box-shadow: var(--shadow);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
     animation: panelPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
