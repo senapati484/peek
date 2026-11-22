@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-PEEK_BIN="./target/release/peek"
+PEEK_BIN="./target/release/Peek"
 
 if [[ ! -f "$PEEK_BIN" ]]; then
     echo "Building Peek in release mode..."

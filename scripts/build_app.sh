@@ -45,8 +45,8 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp target/release/peek "$APP_BUNDLE/Contents/MacOS/peek"
-chmod +x "$APP_BUNDLE/Contents/MacOS/peek"
+cp target/release/Peek "$APP_BUNDLE/Contents/MacOS/Peek"
+chmod +x "$APP_BUNDLE/Contents/MacOS/Peek"
 cp assets/AppIcon.icns "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 cat > "$APP_BUNDLE/Contents/Info.plist" << 'EOF'
@@ -57,7 +57,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'EOF'
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>peek</string>
+    <string>Peek</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>

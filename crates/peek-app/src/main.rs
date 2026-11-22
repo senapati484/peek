@@ -83,6 +83,15 @@ pub fn setup_macos_menu() {
     unsafe {
         let mtm = MainThreadMarker::new_unchecked();
         let app = NSApplication::sharedApplication(mtm);
+
+        // Explicitly set process name to "Peek" for macOS dock and menu
+        use objc2::msg_send;
+        let proc_info_cls = objc2::class!(NSProcessInfo);
+        let proc_info: *mut objc2::runtime::AnyObject = msg_send![proc_info_cls, processInfo];
+        if !proc_info.is_null() {
+            let () = msg_send![proc_info, setProcessName: ns_string!("Peek")];
+        }
+
         let main_menu = NSMenu::new(mtm);
 
         let add_item = |menu: &NSMenu,
