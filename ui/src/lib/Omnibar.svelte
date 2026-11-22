@@ -220,9 +220,51 @@
     window.addEventListener('storage', syncTheme);
 
     const onWindowKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
+      const mod = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (mod && !event.shiftKey && !event.altKey) {
+        if (key === 'l') {
+          event.preventDefault();
+          openBar();
+          return;
+        }
+        if (key === 't') {
+          event.preventDefault();
+          send({ type: 'newTab' });
+          return;
+        }
+        if (key === 'w') {
+          event.preventDefault();
+          if (activeId != null) {
+            send({ type: 'closeTab', id: activeId });
+          }
+          return;
+        }
+        if (key === 'r') {
+          event.preventDefault();
+          send({ type: 'reload' });
+          return;
+        }
+      }
+
+      if (mod && event.shiftKey && !event.altKey) {
+        if (key === '[' || key === '{') {
+          event.preventDefault();
+          send({ type: 'setDrawer', open: !drawerOpen, side: 'left', section: 'tabs' });
+          return;
+        }
+        if (key === ']' || key === '}') {
+          event.preventDefault();
+          send({ type: 'setDrawer', open: !drawerOpen, side: 'right', section: 'settings' });
+          return;
+        }
+      }
+
+      if (event.key === 'Escape' && !isStartPage && focused) {
         event.preventDefault();
-        openBar();
+        closeBar();
+        return;
       }
     };
     window.addEventListener('keydown', onWindowKey, true);

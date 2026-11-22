@@ -290,6 +290,34 @@ const PAGE_SCRIPT: &str = r##"
   document.addEventListener("DOMContentLoaded", reportFavicon);
   setTimeout(reportFavicon, 1200);
 
+  var lastReportedUrl = location.href;
+  function reportUrl() {
+    try {
+      if (location.href && location.href !== lastReportedUrl) {
+        lastReportedUrl = location.href;
+        send({ type: "urlChanged", url: location.href });
+      }
+    } catch (e) {}
+  }
+  var origPushState = history.pushState;
+  if (origPushState) {
+    history.pushState = function () {
+      var ret = origPushState.apply(this, arguments);
+      reportUrl();
+      return ret;
+    };
+  }
+  var origReplaceState = history.replaceState;
+  if (origReplaceState) {
+    history.replaceState = function () {
+      var ret = origReplaceState.apply(this, arguments);
+      reportUrl();
+      return ret;
+    };
+  }
+  window.addEventListener("popstate", reportUrl);
+  window.addEventListener("hashchange", reportUrl);
+
   var hoverTimer = null;
   var hoverAnchor = null;
   var hoverUrl = "";

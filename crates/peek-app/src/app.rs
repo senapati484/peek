@@ -264,10 +264,22 @@ impl App {
         self.create_chrome()?;
 
         let stored = self.store.load_tabs()?;
-        let stored: Vec<peek_store::StoredTab> = stored
+        let mut stored: Vec<peek_store::StoredTab> = stored
             .into_iter()
             .filter(|t| !t.url.contains("ogs.google.com") && !t.url.contains("/widget/account"))
             .collect();
+
+        // Self-heal any tabs that had their url saved as about:blank but have a real title
+        for tab in &mut stored {
+            if (peek_core::url::is_blank(&tab.url) || tab.url.is_empty()) && !tab.title.is_empty() {
+                if let Ok(entries) = self.store.search_history(&tab.title, 1) {
+                    if let Some(entry) = entries.first() {
+                        tab.url = entry.url.clone();
+                    }
+                }
+            }
+        }
+
         let session = self.store.load_session()?;
         let active = session.as_ref().and_then(|s| s.active_tab);
         let (manager, actions) = TabManager::restore(
@@ -329,6 +341,14 @@ impl App {
                         url: url.clone(),
                     });
                     self.send_loading(tab);
+                    self.push_tabs();
+                    if Some(tab) == self.tabs.active_id() && !peek_core::url::is_blank(&url) {
+                        if let Some(id) = self.ui_id {
+                            let _ = self.engine.set_bounds(id, self.chrome_bounds());
+                        }
+                        let _ = self.engine.set_visible(view, true);
+                        let _ = self.engine.focus(view);
+                    }
                 }
             }
             UserEvent::Load { view, event, url } => self.on_load(view, event, url),
@@ -361,9 +381,20 @@ impl App {
         match event {
             LoadEvent::Started => {
                 self.tabs.set_loading(tab, true);
-                if let Some(id) = self.ui_id {
-                    let bounds = self.chrome_bounds();
-                    let _ = self.engine.set_bounds(id, bounds);
+                if !url.is_empty() && !peek_core::url::is_blank(&url) {
+                    self.tabs.set_url(tab, &url);
+                    self.send(Event::UrlChanged {
+                        id: tab,
+                        url: url.clone(),
+                    });
+                    if Some(tab) == self.tabs.active_id() {
+                        if let Some(id) = self.ui_id {
+                            let bounds = self.chrome_bounds();
+                            let _ = self.engine.set_bounds(id, bounds);
+                        }
+                        let _ = self.engine.set_visible(view, true);
+                        let _ = self.engine.focus(view);
+                    }
                 }
                 self.send_loading(tab);
                 self.push_tabs();
@@ -371,23 +402,60 @@ impl App {
             }
             LoadEvent::Finished => {
                 self.tabs.set_loading(tab, false);
-                let (tab_url, title) = self
+                let final_url = if !url.is_empty() && !peek_core::url::is_blank(&url) {
+                    url
+                } else if let Some(live_url) = self.engine.url(view) {
+                    if !live_url.is_empty() && !peek_core::url::is_blank(&live_url) {
+                        live_url
+                    } else {
+                        self.tabs
+                            .tab(tab)
+                            .map(|t| t.url.clone())
+                            .unwrap_or_else(|| peek_core::url::blank_page().to_string())
+                    }
+                } else {
+                    self.tabs
+                        .tab(tab)
+                        .map(|t| t.url.clone())
+                        .unwrap_or_else(|| peek_core::url::blank_page().to_string())
+                };
+
+                if !final_url.is_empty() && !peek_core::url::is_blank(&final_url) {
+                    self.tabs.set_url(tab, &final_url);
+                    self.send(Event::UrlChanged {
+                        id: tab,
+                        url: final_url.clone(),
+                    });
+                }
+
+                let title = self
                     .tabs
                     .tab(tab)
-                    .map(|t| (t.url.clone(), t.title.clone()))
-                    .unwrap_or((url, String::new()));
-                if tab_url.starts_with("http://") || tab_url.starts_with("https://") {
-                    let _ = self.store.record_visit(&tab_url, &title, now_ms());
-                    self.apply_cosmetic_filters(view, &tab_url);
-                    for script in self.extensions.matching_content_scripts(&tab_url, &self.page_nonce) {
+                    .map(|t| t.title.clone())
+                    .unwrap_or_default();
+                if final_url.starts_with("http://") || final_url.starts_with("https://") {
+                    let _ = self.store.record_visit(&final_url, &title, now_ms());
+                    self.apply_cosmetic_filters(view, &final_url);
+                    for script in self
+                        .extensions
+                        .matching_content_scripts(&final_url, &self.page_nonce)
+                    {
                         let _ = self.engine.evaluate(view, &script);
                     }
                 }
 
-                if let Some(id) = self.ui_id {
-                    let bounds = self.chrome_bounds();
-                    let _ = self.engine.set_bounds(id, bounds);
+                if Some(tab) == self.tabs.active_id() {
+                    let is_blank = peek_core::url::is_blank(&final_url);
+                    if let Some(id) = self.ui_id {
+                        let bounds = self.chrome_bounds();
+                        let _ = self.engine.set_bounds(id, bounds);
+                    }
+                    let _ = self.engine.set_visible(view, !is_blank);
+                    if !is_blank {
+                        let _ = self.engine.focus(view);
+                    }
                 }
+
                 self.send_loading(tab);
                 self.push_tabs();
                 self.send_cookies_count();
@@ -610,6 +678,18 @@ impl App {
                     self.send_cookies_count();
                 }
             }
+            PageEvent::UrlChanged { url } => {
+                if let Some(tab) = tab {
+                    if !url.is_empty() && !peek_core::url::is_blank(&url) {
+                        self.tabs.set_url(tab, &url);
+                        self.send(Event::UrlChanged {
+                            id: tab,
+                            url: url.clone(),
+                        });
+                        self.push_tabs();
+                    }
+                }
+            }
             PageEvent::ExtensionMessage { .. } => {}
 
         }
@@ -797,7 +877,23 @@ impl App {
                 TabAction::Destroy { id } => self.destroy_tab_view(id),
                 TabAction::Show { id, visible } => {
                     if let Some(view) = self.tab_views.get(&id).copied() {
-                        let should_show = visible && !self.is_active_blank();
+                        if visible {
+                            if let Some(t) = self.tabs.tab(id) {
+                                if peek_core::url::is_blank(&t.url) {
+                                    if let Some(live_url) = self.engine.url(view) {
+                                        if !live_url.is_empty() && !peek_core::url::is_blank(&live_url) {
+                                            self.tabs.set_url(id, &live_url);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        let is_blank = self
+                            .tabs
+                            .tab(id)
+                            .map(|t| peek_core::url::is_blank(&t.url))
+                            .unwrap_or(true);
+                        let should_show = visible && !is_blank;
                         let _ = self.engine.set_visible(view, should_show);
                         if should_show {
                             let _ = self.engine.focus(view);
@@ -808,8 +904,10 @@ impl App {
                     if let Some(view) = self.tab_views.get(&id).copied() {
                         let _ = self.engine.load_url(view, &url);
                         let is_blank = peek_core::url::is_blank(&url);
-                        let _ = self.engine.set_visible(view, !is_blank);
-                        if !is_blank {
+                        let is_active = self.tabs.active_id() == Some(id);
+                        let should_show = is_active && !is_blank;
+                        let _ = self.engine.set_visible(view, should_show);
+                        if should_show {
                             let _ = self.engine.focus(view);
                         }
                     }
@@ -1071,12 +1169,15 @@ impl App {
         if let Some(id) = self.ui_id {
             let _ = self.engine.set_bounds(id, self.chrome_bounds());
         }
+        let active_id = self.tabs.active_id();
         let is_blank = self.is_active_blank();
         let page = self.page_bounds();
-        for view in self.tab_views.values() {
+        for (tab_id, view) in &self.tab_views {
             let _ = self.engine.set_bounds(*view, page);
-            if is_blank {
-                let _ = self.engine.set_visible(*view, false);
+            let should_show = Some(*tab_id) == active_id && !is_blank;
+            let _ = self.engine.set_visible(*view, should_show);
+            if should_show {
+                let _ = self.engine.focus(*view);
             }
         }
         if let Some(id) = self.drawer_id {

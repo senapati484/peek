@@ -113,12 +113,13 @@
   }
 
   function domainInitial(url: string): string {
+    if (!url || url === 'about:blank') return '✦';
     try {
       const u = new URL(url);
       const h = u.hostname.replace(/^www\./, '');
-      return (h[0] || 'P').toUpperCase();
+      return (h[0] || '✦').toUpperCase();
     } catch {
-      return 'P';
+      return '✦';
     }
   }
 
@@ -254,7 +255,50 @@
     onEvent(handleEvent);
     requestState();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+        return;
+      }
+      const mod = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+      if (mod && !event.shiftKey && !event.altKey) {
+        if (key === 't') {
+          event.preventDefault();
+          send({ type: 'newTab' });
+          close();
+          return;
+        }
+        if (key === 'w') {
+          event.preventDefault();
+          if (activeTabId != null) {
+            send({ type: 'closeTab', id: activeTabId });
+          }
+          return;
+        }
+      }
+      if (mod && event.shiftKey && !event.altKey) {
+        if (key === '[' || key === '{') {
+          event.preventDefault();
+          if (currentSide === 'left') {
+            close();
+          } else {
+            currentSide = 'left';
+            section = 'tabs';
+          }
+          return;
+        }
+        if (key === ']' || key === '}') {
+          event.preventDefault();
+          if (currentSide === 'right') {
+            close();
+          } else {
+            currentSide = 'right';
+            section = 'general';
+          }
+          return;
+        }
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -316,7 +360,7 @@
             <button
               class="tab-row"
               onclick={() => switchTo(tab.id)}
-              title={`${tab.title || tab.url}\n${tab.url}`}
+              title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
             >
               {#if tab.favicon}
                 <img
@@ -328,7 +372,7 @@
               {:else}
                 <span class="favicon-initial">{domainInitial(tab.url)}</span>
               {/if}
-              <span class="title">{tab.title || tab.url || 'Untitled'}</span>
+              <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
               {#if tab.audible}
                 <span class="pill audio" title="Audible tab">
                   <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">

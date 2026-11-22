@@ -301,11 +301,12 @@ pub enum PageEvent {
     /// A cookie was set from client script or navigation.
     CookieSet { cookie: String, url: String },
     /// Extension content-script bridge message (Phase 5).
-
     ExtensionMessage {
         extension_id: String,
         payload: serde_json::Value,
     },
+    /// An in-page SPA navigation (pushState, replaceState, popstate, hashchange).
+    UrlChanged { url: String },
 }
 
 /// Host-level shortcuts reported by injected page scripts.
