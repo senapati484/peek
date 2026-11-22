@@ -1,3 +1,5 @@
+export type EdgeSide = 'left' | 'right';
+
 export type TabInfo = {
   id: number;
   url: string;
@@ -34,7 +36,7 @@ export type PeekEvent =
   | { type: 'urlChanged'; id: number; url: string }
   | { type: 'suggestionsReady'; query: string; items: Suggestion[] }
   | { type: 'focusOmnibar' }
-  | { type: 'drawerState'; open: boolean; side?: 'left' | 'right'; section?: string }
+  | { type: 'drawerState'; open: boolean; side?: EdgeSide; section?: string }
   | { type: 'adblockCount'; blocked: number; allowedOnSite: boolean; host: string | null }
   | { type: 'profileChanged'; name: string }
   | { type: 'profilesList'; profiles: string[]; active: string }
@@ -44,7 +46,7 @@ export type PeekEvent =
       maxLive: number;
       idleDiscardMinutes: number;
       hoverDelayMs: number;
-      drawerSide: 'left' | 'right';
+      drawerSide: EdgeSide;
       edgeZone: number;
       startBlank: boolean;
       searchEngine: string;
@@ -66,7 +68,7 @@ export type PeekCommand =
   | { type: 'requestState' }
   | { type: 'setOmnibarOpen'; open: boolean }
   | { type: 'focusPage' }
-  | { type: 'setDrawer'; open: boolean; side?: 'left' | 'right'; section?: string }
+  | { type: 'setDrawer'; open: boolean; side?: EdgeSide; section?: string }
   | { type: 'openUrl'; url: string }
   | { type: 'setSiteAdblock'; host: string; enabled: boolean }
   | { type: 'setSetting'; key: string; value: unknown }
