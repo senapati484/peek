@@ -284,6 +284,7 @@ impl App {
 
     pub fn start(&mut self) -> anyhow::Result<()> {
         self.create_chrome()?;
+        let _ = self.create_drawer_prewarm();
 
         let stored = self.store.load_tabs()?;
         let mut stored: Vec<peek_store::StoredTab> = stored
@@ -1138,33 +1139,59 @@ impl App {
         Ok(())
     }
 
+    fn create_drawer_prewarm(&mut self) -> anyhow::Result<()> {
+        if self.drawer_id.is_some() {
+            return Ok(());
+        }
+        let bounds = self.drawer_bounds_for_side(EdgeSide::Left);
+        let script = inject::ui_script(&self.ui_nonce);
+        let url = "peek://localhost/index.html#drawer?side=left&section=tabs".to_string();
+        let id = self.engine.create(
+            &self.window,
+            WebViewOptions {
+                bounds,
+                url: Some(url),
+                assets: Some(Arc::new(UiAssets)),
+                initialization_scripts: vec![script],
+                visible: false,
+                accept_first_mouse: true,
+                ..Default::default()
+            },
+        )?;
+        self.drawer_id = Some(id);
+        Ok(())
+    }
+
     fn open_drawer_on_side(&mut self, side: EdgeSide, section: Option<&str>) {
         self.current_drawer_side = side;
-        if self.drawer_open {
-            if let Some(id) = self.drawer_id {
-                let bounds = self.drawer_bounds_for_side(side);
-                let _ = self.engine.set_bounds(id, bounds);
-                let _ = self.engine.focus(id);
-                self.send(Event::DrawerState {
-                    open: true,
-                    side: Some(side),
-                    section: section.map(str::to_string),
-                });
-                self.send_profiles_list();
-                self.send_extensions_list();
-            }
-            return;
-        }
-        self.omnibar_open = false;
-        if let Some(id) = self.ui_id {
-            let _ = self.engine.set_bounds(id, self.chrome_bounds());
-        }
         let bounds = self.drawer_bounds_for_side(side);
-        let script = inject::ui_script(&self.ui_nonce);
         let section_param = section.unwrap_or(match side {
             EdgeSide::Left => "tabs",
             EdgeSide::Right => "settings",
         });
+
+        self.omnibar_open = false;
+        if let Some(id) = self.ui_id {
+            let _ = self.engine.set_bounds(id, self.chrome_bounds());
+        }
+
+        if let Some(id) = self.drawer_id {
+            let _ = self.engine.set_bounds(id, bounds);
+            let _ = self.engine.set_visible(id, true);
+            let _ = self.engine.focus(id);
+            self.drawer_open = true;
+            self.send(Event::DrawerState {
+                open: true,
+                side: Some(side),
+                section: Some(section_param.to_string()),
+            });
+            self.push_tabs();
+            self.send_profiles_list();
+            self.send_extensions_list();
+            return;
+        }
+
+        let script = inject::ui_script(&self.ui_nonce);
         let url = format!(
             "peek://localhost/index.html#drawer?side={:?}&section={}",
             side, section_param
@@ -1177,6 +1204,7 @@ impl App {
                 url: Some(url),
                 assets: Some(Arc::new(UiAssets)),
                 initialization_scripts: vec![script],
+                visible: true,
                 accept_first_mouse: true,
                 ..Default::default()
             },
@@ -1190,6 +1218,7 @@ impl App {
                     side: Some(side),
                     section: Some(section_param.to_string()),
                 });
+                self.push_tabs();
                 self.send_profiles_list();
                 self.send_extensions_list();
             }
@@ -1198,8 +1227,8 @@ impl App {
     }
 
     fn close_drawer(&mut self) {
-        if let Some(id) = self.drawer_id.take() {
-            self.engine.destroy(id);
+        if let Some(id) = self.drawer_id {
+            let _ = self.engine.set_visible(id, false);
         }
         if self.drawer_open {
             self.drawer_open = false;
@@ -1746,6 +1775,9 @@ impl App {
     fn shutdown(&mut self) {
         self.running.store(false, Ordering::Relaxed);
         self.save_session();
+        if let Some(id) = self.drawer_id.take() {
+            self.engine.destroy(id);
+        }
     }
 
     fn spawn_ticker(&mut self) {
