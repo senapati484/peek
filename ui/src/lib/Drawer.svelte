@@ -971,9 +971,10 @@
   .drawer-logo {
     width: 20px;
     height: 20px;
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
   }
 
   .drawer-title {

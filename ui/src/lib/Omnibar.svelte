@@ -881,16 +881,18 @@
 
   .hero-logo {
     position: relative;
-    width: 68px;
-    height: 68px;
-    border-radius: 17px;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 32px -8px var(--accent-glow);
+    width: 72px;
+    height: 72px;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 24px var(--accent-glow));
     z-index: 1;
     transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hero-logo:hover {
-    transform: scale(1.05);
+    transform: scale(1.06);
   }
 
   /* Sleek, Prominent Responsive Search Box */
@@ -1075,12 +1077,12 @@
   }
 
   .bar-logo {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 17px;
+    height: 17px;
     display: block;
     user-select: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
   }
 
   .nav-btn {
