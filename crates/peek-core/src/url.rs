@@ -201,6 +201,7 @@ mod tests {
             audible: false,
             form_dirty: false,
             pinned: false,
+            group_id: None,
             live: true,
         }
     }

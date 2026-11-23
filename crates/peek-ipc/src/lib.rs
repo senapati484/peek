@@ -218,6 +218,18 @@ pub enum Command {
     SaveNote { content: String },
     /// Request saved scratchpad notes.
     GetNote,
+    /// Save custom vertical tab groups.
+    SaveTabGroups { groups: Vec<TabGroup> },
+    /// Assign a tab to a tab group.
+    SetTabGroup { tab_id: TabId, group_id: Option<String> },
+    /// Request installed UserScripts.
+    GetUserScripts,
+    /// Enable or disable a UserScript.
+    ToggleUserScript { id: String, enabled: bool },
+    /// Save or create a UserScript.
+    SaveUserScript { name: String, code: String },
+    /// Delete a UserScript.
+    DeleteUserScript { id: String },
     Quit,
 }
 
@@ -320,6 +332,35 @@ pub enum Event {
     ZoomLevel {
         percent: u32,
     },
+    TabGroupsChanged {
+        groups: Vec<TabGroup>,
+    },
+    UserScriptsList {
+        scripts: Vec<UserScriptSummary>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TabGroup {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub collapsed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserScriptSummary {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub match_patterns: Vec<String>,
+    pub run_at: String,
+    pub enabled: bool,
+    pub code: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -374,6 +415,8 @@ pub struct TabInfo {
     pub audible: bool,
     #[serde(default)]
     pub pinned: bool,
+    #[serde(default)]
+    pub group_id: Option<String>,
     pub active: bool,
 }
 
@@ -538,6 +581,7 @@ mod tests {
                 loading: false,
                 audible: false,
                 pinned: false,
+                group_id: None,
                 active: true,
             }],
             active: Some(1),

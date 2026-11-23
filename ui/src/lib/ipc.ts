@@ -9,6 +9,25 @@ export type ExtensionSummary = {
   fullySupported: boolean;
 };
 
+export type TabGroup = {
+  id: string;
+  name: string;
+  color: string;
+  collapsed: boolean;
+};
+
+export type UserScriptSummary = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  matchPatterns: string[];
+  runAt: string;
+  enabled: boolean;
+  code: string;
+};
+
 export type TabInfo = {
   id: number;
   url: string;
@@ -19,6 +38,7 @@ export type TabInfo = {
   audible: boolean;
   pinned: boolean;
   active: boolean;
+  groupId?: string | null;
 };
 
 export type PinnedSite = {
@@ -94,7 +114,9 @@ export type PeekEvent =
   | { type: 'zenModeState'; active: boolean }
   | { type: 'invertDarkState'; active: boolean }
   | { type: 'noteLoaded'; content: string }
-  | { type: 'zoomLevel'; percent: number };
+  | { type: 'zoomLevel'; percent: number }
+  | { type: 'tabGroupsChanged'; groups: TabGroup[] }
+  | { type: 'userScriptsList'; scripts: UserScriptSummary[] };
 
 export type PeekCommand =
   | { type: 'navigate'; input: string }
@@ -152,6 +174,12 @@ export type PeekCommand =
   | { type: 'copyMarkdownLink' }
   | { type: 'saveNote'; content: string }
   | { type: 'getNote' }
+  | { type: 'saveTabGroups'; groups: TabGroup[] }
+  | { type: 'setTabGroup'; tabId: number; groupId?: string | null }
+  | { type: 'getUserScripts' }
+  | { type: 'toggleUserScript'; id: string; enabled: boolean }
+  | { type: 'saveUserScript'; name: string; code: string }
+  | { type: 'deleteUserScript'; id: string }
   | { type: 'quit' };
 
 type Bridge = {

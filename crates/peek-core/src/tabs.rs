@@ -27,6 +27,7 @@ pub struct Tab {
     pub audible: bool,
     pub form_dirty: bool,
     pub pinned: bool,
+    pub group_id: Option<String>,
     /// Whether a webview currently exists for this tab.
     pub live: bool,
 }
@@ -44,6 +45,7 @@ impl Tab {
             audible: false,
             form_dirty: false,
             pinned: false,
+            group_id: None,
             live: true,
         }
     }
@@ -66,6 +68,7 @@ impl Tab {
             loading: self.loading,
             audible: self.audible,
             pinned: self.pinned,
+            group_id: self.group_id.clone(),
             active: active == Some(self.id),
         }
     }
@@ -154,6 +157,7 @@ impl TabManager {
                 audible: false,
                 form_dirty: false,
                 pinned: stored.pinned,
+                group_id: None,
                 live: false,
             });
         }
@@ -395,6 +399,12 @@ impl TabManager {
     pub fn set_favicon(&mut self, id: TabId, favicon: Option<String>) {
         if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
             tab.favicon = favicon;
+        }
+    }
+
+    pub fn set_group(&mut self, id: TabId, group_id: Option<String>) {
+        if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+            tab.group_id = group_id;
         }
     }
 

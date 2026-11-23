@@ -8,13 +8,13 @@ use peek_core::tabs::{TabAction, TabConfig, TabManager};
 use peek_core::url::{resolve_input, NavigateTarget, SearchEngine};
 use peek_core::now_ms;
 use peek_adblock::{AdblockConfig, AdblockEngine, BlockCounters};
-use peek_ext::ExtensionRegistry;
+use peek_ext::{ExtensionRegistry, UserScriptRegistry};
 use peek_engine::{
     Bounds, Engine, EngineEvents, LoadEvent, WebViewId, WebViewOptions, WryEngine,
 };
 use peek_ipc::{
     BookmarkItem, Command, EdgeSide, Envelope, Event, ExtensionSummary, HistoryItem, PageEvent,
-    Shortcut, Suggestion, SuggestionKind, TabId,
+    Shortcut, Suggestion, SuggestionKind, TabGroup, TabId, UserScriptSummary,
 };
 use peek_preview::{PreviewAction, PreviewConfig, PreviewController};
 use peek_store::{Session, Store};
@@ -193,6 +193,7 @@ pub struct App {
     current_drawer_side: EdgeSide,
     current_profile_name: String,
     extensions: ExtensionRegistry,
+    userscripts: UserScriptRegistry,
     is_zen_mode: bool,
 }
 
@@ -250,6 +251,9 @@ impl App {
         let extensions_dir = profile_dir.join("extensions");
         let _ = std::fs::create_dir_all(&extensions_dir);
         let extensions = ExtensionRegistry::load_from_dir(&extensions_dir);
+        let userscripts_dir = profile_dir.join("userscripts");
+        let _ = std::fs::create_dir_all(&userscripts_dir);
+        let userscripts = UserScriptRegistry::load_from_dir(&userscripts_dir);
 
         let current_drawer_side = settings.drawer_side;
         Ok(Self {
@@ -282,6 +286,7 @@ impl App {
             current_drawer_side,
             current_profile_name,
             extensions,
+            userscripts,
             is_zen_mode: false,
         })
     }
@@ -301,6 +306,8 @@ impl App {
         self.push_tabs();
         self.send_pinned_sites();
         self.send_profiles_list();
+        self.send_tab_groups();
+        self.send_userscripts_list();
         Ok(())
     }
 
@@ -508,6 +515,12 @@ impl App {
                         .matching_content_scripts(&final_url, &self.page_nonce)
                     {
                         let _ = self.engine.evaluate(view, &script);
+                    }
+                    for script in self.userscripts.matching_scripts(&final_url, "document-end") {
+                        let _ = self.engine.evaluate(view, &script.generate_injected_js());
+                    }
+                    for script in self.userscripts.matching_scripts(&final_url, "document-idle") {
+                        let _ = self.engine.evaluate(view, &script.generate_injected_js());
                     }
                 }
 
@@ -900,6 +913,37 @@ impl App {
             }
             Command::GetNote => {
                 self.send_note();
+            }
+            Command::SaveTabGroups { groups } => {
+                let _ = self.store.set_setting_json("tab_groups", &groups);
+                self.send(Event::TabGroupsChanged { groups });
+            }
+            Command::SetTabGroup { tab_id, group_id } => {
+                self.tabs.set_group(tab_id, group_id);
+                self.push_tabs();
+            }
+            Command::GetUserScripts => {
+                self.send_userscripts_list();
+            }
+            Command::ToggleUserScript { id, enabled } => {
+                self.userscripts.toggle_script(&id, enabled);
+                self.send_userscripts_list();
+            }
+            Command::SaveUserScript { name, code } => {
+                if let Ok(_saved) = self.userscripts.save_script(&name, &code) {
+                    self.send_userscripts_list();
+                    self.send(Event::Toast {
+                        message: format!("Saved UserScript '{name}'"),
+                    });
+                }
+            }
+            Command::DeleteUserScript { id } => {
+                if self.userscripts.delete_script(&id) {
+                    self.send_userscripts_list();
+                    self.send(Event::Toast {
+                        message: "UserScript deleted".into(),
+                    });
+                }
             }
             Command::Quit => {
                 self.shutdown();
@@ -1310,6 +1354,10 @@ impl App {
             self.settings.edge_zone,
         );
         let is_blank = peek_core::url::is_blank(url);
+        let mut init_scripts = vec![script];
+        for us in self.userscripts.matching_scripts(url, "document-start") {
+            init_scripts.push(us.generate_injected_js());
+        }
         let data_store_identifier = if self.current_profile_name == "default" {
             None
         } else {
@@ -1322,7 +1370,7 @@ impl App {
                 url: Some(url.to_string()),
                 assets: Some(Arc::new(PageAssets)),
                 visible: !is_blank,
-                initialization_scripts: vec![script],
+                initialization_scripts: init_scripts,
                 accept_first_mouse: true,
                 data_directory: Some(self.profile_web_data_dir.clone()),
                 data_store_identifier,
@@ -1442,6 +1490,8 @@ impl App {
             self.push_tabs();
             self.send_profiles_list();
             self.send_extensions_list();
+            self.send_tab_groups();
+            self.send_userscripts_list();
             return;
         }
 
@@ -1477,6 +1527,8 @@ impl App {
                 self.push_tabs();
                 self.send_profiles_list();
                 self.send_extensions_list();
+                self.send_tab_groups();
+                self.send_userscripts_list();
             }
             Err(error) => eprintln!("peek: failed to open drawer: {error}"),
         }
@@ -1813,6 +1865,9 @@ impl App {
         let extensions_dir = self.profile_dir.join("extensions");
         let _ = std::fs::create_dir_all(&extensions_dir);
         self.extensions = ExtensionRegistry::load_from_dir(&extensions_dir);
+        let userscripts_dir = self.profile_dir.join("userscripts");
+        let _ = std::fs::create_dir_all(&userscripts_dir);
+        self.userscripts = UserScriptRegistry::load_from_dir(&userscripts_dir);
         let _ = self.store.seed_default_bookmarks(now_ms());
 
         // 7. Restore tabs from the new profile store
@@ -1830,6 +1885,8 @@ impl App {
         self.send_pinned_sites();
         self.send_cookies_count();
         self.send_extensions_list();
+        self.send_tab_groups();
+        self.send_userscripts_list();
         self.send_bookmarks_list();
         self.send_history_list();
         self.send_note();
@@ -2073,6 +2130,34 @@ impl App {
             .unwrap_or_default()
             .unwrap_or_default();
         self.send(Event::NoteLoaded { content });
+    }
+
+    fn send_tab_groups(&self) {
+        let groups: Vec<TabGroup> = self
+            .store
+            .get_setting_or("tab_groups", Vec::new())
+            .unwrap_or_default();
+        self.send(Event::TabGroupsChanged { groups });
+    }
+
+    fn send_userscripts_list(&self) {
+        let summaries: Vec<UserScriptSummary> = self
+            .userscripts
+            .scripts
+            .iter()
+            .map(|s| UserScriptSummary {
+                id: s.id.clone(),
+                name: s.name.clone(),
+                version: s.version.clone(),
+                description: s.description.clone(),
+                author: s.author.clone(),
+                match_patterns: s.match_patterns.clone(),
+                run_at: s.run_at.clone(),
+                enabled: s.enabled,
+                code: s.code.clone(),
+            })
+            .collect();
+        self.send(Event::UserScriptsList { scripts: summaries });
     }
 
     fn send_adblock_state(&self) {

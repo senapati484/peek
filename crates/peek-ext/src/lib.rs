@@ -10,11 +10,13 @@ pub mod crx;
 pub mod matcher;
 pub mod registry;
 pub mod shim;
+pub mod userscript;
 
 pub use crx::extract_crx_or_zip;
 pub use matcher::{matches_any, matches_pattern, MatchPattern};
 pub use registry::{ExtensionRegistry, InstalledExtension};
 pub use shim::wrap_content_script;
+pub use userscript::{UserScript, UserScriptRegistry};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExtError {

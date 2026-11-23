@@ -11,8 +11,16 @@
     type ExtensionSummary,
     type HistoryItem,
     type PeekEvent,
+    type TabGroup,
     type TabInfo,
+    type UserScriptSummary,
   } from "./ipc";
+  import {
+    decryptSyncPayload,
+    encryptSyncPayload,
+    getOrCreateDeviceId,
+    type SyncPayload,
+  } from "./crypto_sync";
 
   type Section =
     | "tabs"
@@ -26,6 +34,8 @@
     | "preview"
     | "profiles"
     | "extensions"
+    | "scripts"
+    | "sync"
     | "shortcuts"
     | "about";
 
@@ -47,6 +57,8 @@
       "preview",
       "profiles",
       "extensions",
+      "scripts",
+      "sync",
       "shortcuts",
       "about",
     ];
@@ -270,6 +282,228 @@
 
   let pinnedTabs = $derived(filteredTabs.filter((t) => t.pinned));
   let regularTabs = $derived(filteredTabs.filter((t) => !t.pinned));
+
+  // Tab Groups
+  let tabGroups = $state<TabGroup[]>([]);
+  let isCreatingGroup = $state(false);
+  let newGroupName = $state("");
+  let newGroupColor = $state("#3b82f6");
+  const GROUP_PALETTE = [
+    "#3b82f6", // blue
+    "#10b981", // emerald
+    "#f59e0b", // amber
+    "#ef4444", // rose
+    "#8b5cf6", // purple
+    "#ec4899", // pink
+    "#06b6d4", // cyan
+    "#64748b", // slate
+  ];
+
+  let groupedTabsMap = $derived.by(() => {
+    const map: Record<string, TabInfo[]> = {};
+    for (const g of tabGroups) {
+      map[g.id] = [];
+    }
+    for (const t of regularTabs) {
+      if (t.groupId && map[t.groupId]) {
+        map[t.groupId].push(t);
+      }
+    }
+    return map;
+  });
+
+  let ungroupedRegularTabs = $derived(
+    regularTabs.filter((t) => !t.groupId || !tabGroups.some((g) => g.id === t.groupId)),
+  );
+
+  function createTabGroup() {
+    const name = newGroupName.trim();
+    if (!name) return;
+    const id = "grp-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6);
+    const newGroup: TabGroup = {
+      id,
+      name,
+      color: newGroupColor,
+      collapsed: false,
+    };
+    const updated = [...tabGroups, newGroup];
+    tabGroups = updated;
+    send({ type: "saveTabGroups", groups: updated });
+    newGroupName = "";
+    isCreatingGroup = false;
+  }
+
+  function toggleGroupCollapse(groupId: string) {
+    const updated = tabGroups.map((g) =>
+      g.id === groupId ? { ...g, collapsed: !g.collapsed } : g
+    );
+    tabGroups = updated;
+    send({ type: "saveTabGroups", groups: updated });
+  }
+
+  function deleteTabGroup(groupId: string) {
+    for (const t of tabs) {
+      if (t.groupId === groupId) {
+        send({ type: "setTabGroup", tabId: t.id, groupId: null });
+      }
+    }
+    const updated = tabGroups.filter((g) => g.id !== groupId);
+    tabGroups = updated;
+    send({ type: "saveTabGroups", groups: updated });
+  }
+
+  function addActiveTabToGroup(groupId: string) {
+    if (activeTabId != null) {
+      send({ type: "setTabGroup", tabId: activeTabId, groupId });
+    }
+  }
+
+  function removeTabFromGroup(tabId: number) {
+    send({ type: "setTabGroup", tabId, groupId: null });
+  }
+
+  function assignTabToGroup(tabId: number, groupId: string) {
+    send({ type: "setTabGroup", tabId, groupId });
+  }
+
+  // UserScripts
+  let userScripts = $state<UserScriptSummary[]>([]);
+  let isEditingScript = $state(false);
+  let scriptEditorName = $state("");
+  let scriptEditorCode = $state("");
+
+  function openNewScriptEditor() {
+    scriptEditorName = "New Script";
+    scriptEditorCode = `// ==UserScript==
+// @name         New Custom Script
+// @version      1.0
+// @description  Custom userscript for Peek
+// @author       You
+// @match        *://*/*
+// @run-at       document-end
+// @grant        none
+// ==/UserScript==
+
+(function() {
+  'use strict';
+  console.log('[Peek UserScript] Running on:', window.location.href);
+})();
+`;
+    isEditingScript = true;
+  }
+
+  function handleSaveScript() {
+    if (!scriptEditorName.trim() || !scriptEditorCode.trim()) return;
+    send({
+      type: "saveUserScript",
+      name: scriptEditorName.trim(),
+      code: scriptEditorCode,
+    });
+    isEditingScript = false;
+  }
+
+  function handleDeleteScript(id: string) {
+    send({ type: "deleteUserScript", id });
+  }
+
+  function handleToggleScript(id: string, enabled: boolean) {
+    send({ type: "toggleUserScript", id, enabled: !enabled });
+  }
+
+  // E2EE Cloud Sync
+  let syncPassphrase = $state(
+    typeof window !== "undefined"
+      ? localStorage.getItem("peek_sync_passphrase") || ""
+      : "",
+  );
+  let showPassphrase = $state(false);
+  let syncBundleOutput = $state("");
+  let syncBundleInput = $state("");
+  let syncStatus = $state<string | null>(null);
+  let syncError = $state<string | null>(null);
+  let lastSyncedTime = $state<number | null>(
+    typeof window !== "undefined" && localStorage.getItem("peek_last_sync_time")
+      ? Number(localStorage.getItem("peek_last_sync_time"))
+      : null,
+  );
+  let deviceId = $state(typeof window !== "undefined" ? getOrCreateDeviceId() : "peek-node");
+
+  async function handleExportSync() {
+    if (!syncPassphrase || syncPassphrase.length < 4) {
+      syncError = "Passphrase must be at least 4 characters.";
+      return;
+    }
+    syncError = null;
+    try {
+      const payload: SyncPayload = {
+        version: 1,
+        syncedAt: Date.now(),
+        deviceId,
+        bookmarks: bookmarksList,
+        pinnedSites: [],
+        notes: noteContent,
+        tabGroups,
+      };
+      const token = await encryptSyncPayload(syncPassphrase, payload);
+      syncBundleOutput = token;
+      lastSyncedTime = Date.now();
+      localStorage.setItem("peek_sync_passphrase", syncPassphrase);
+      localStorage.setItem("peek_last_sync_time", String(lastSyncedTime));
+      syncStatus = "Encrypted sync token generated! (AES-256-GCM + PBKDF2)";
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(token);
+        syncStatus = "Encrypted token copied to clipboard! (AES-256-GCM)";
+      }
+    } catch (err: any) {
+      syncError = err?.message || "Failed to encrypt sync bundle";
+    }
+  }
+
+  async function handleImportSync() {
+    if (!syncPassphrase) {
+      syncError = "Passphrase is required to decrypt the sync payload.";
+      return;
+    }
+    if (!syncBundleInput.trim()) {
+      syncError = "Please paste an encrypted sync token.";
+      return;
+    }
+    syncError = null;
+    try {
+      const payload = await decryptSyncPayload(syncPassphrase, syncBundleInput.trim());
+      
+      // Restore tab groups
+      if (Array.isArray(payload.tabGroups) && payload.tabGroups.length > 0) {
+        tabGroups = payload.tabGroups;
+        send({ type: "saveTabGroups", groups: payload.tabGroups });
+      }
+
+      // Restore notes
+      if (payload.notes) {
+        noteContent = payload.notes;
+        send({ type: "saveNote", content: payload.notes });
+      }
+
+      // Restore bookmarks
+      if (Array.isArray(payload.bookmarks)) {
+        for (const bm of payload.bookmarks) {
+          send({
+            type: "toggleBookmark",
+            url: bm.url,
+            title: bm.title || bm.url,
+          });
+        }
+      }
+
+      localStorage.setItem("peek_sync_passphrase", syncPassphrase);
+      lastSyncedTime = Date.now();
+      localStorage.setItem("peek_last_sync_time", String(lastSyncedTime));
+      syncBundleInput = "";
+      syncStatus = `Successfully decrypted & merged data from ${payload.deviceId}!`;
+    } catch (err: any) {
+      syncError = err?.message || "Decryption failed. Check passphrase.";
+    }
+  }
 
   // History and Bookmarks State
   let historyEntries = $state<HistoryItem[]>([]);
@@ -518,6 +752,12 @@
       case "extensionsList":
         extensions = event.extensions;
         break;
+      case "tabGroupsChanged":
+        tabGroups = event.groups;
+        break;
+      case "userScriptsList":
+        userScripts = event.scripts;
+        break;
       default:
         break;
     }
@@ -556,6 +796,7 @@
     requestState();
     send({ type: "getHistory" });
     send({ type: "getBookmarks" });
+    send({ type: "getUserScripts" });
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -919,150 +1160,248 @@
             {/if}
           {/if}
 
-          {#if regularTabs.length > 0}
-            <ul class="tabs-list">
-              {#each regularTabs as tab, idx (tab.id)}
-                <li
-                  class:active={tab.id === activeTabId}
-                  class:discarded={tab.discarded}
-                  class:keyboard-selected={tab.id === keyboardSelectedTabId}
-                  draggable="true"
-                  ondragstart={(e) => onDragStart(e, tab.id)}
-                  ondragover={(e) => e.preventDefault()}
-                  ondrop={(e) => onDrop(e, idx)}
-                >
-                  <button
-                    class="tab-row"
-                    onclick={() => switchTo(tab.id)}
-                    title={`${tab.title || (tab.url === "about:blank" ? "New Tab" : tab.url)}\n${tab.url}`}
-                  >
-                    {#if tab.favicon}
-                      <img
-                        src={tab.favicon}
-                        alt=""
-                        class="favicon"
-                        onerror={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display =
-                            "none";
-                        }}
-                      />
-                    {:else}
-                      <span class="favicon-initial"
-                        >{domainInitial(tab.url)}</span
-                      >
-                    {/if}
-                    <span class="title"
-                      >{tab.title ||
-                        (tab.url === "about:blank" ? "New Tab" : tab.url) ||
-                        "New Tab"}</span
-                    >
-                    {#if tab.audible}
-                      <span class="pill audio" title="Playing audio">
-                        <svg
-                          viewBox="0 0 16 16"
-                          fill="currentColor"
-                          class="pill-icon"
-                        >
-                          <path
-                            d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
-                          />
-                        </svg>
-                        Audio
-                      </span>
-                    {/if}
-                    {#if tab.discarded}
-                      <span
-                        class="pill sleep"
-                        title="Tab sleeping to save memory. Click to wake."
-                      >
-                        ☾ Sleeping
-                      </span>
-                    {/if}
-                  </button>
-                  {#if tab.audible}
-                    <button
-                      class="tab-audio-btn"
-                      title="Mute / Unmute tab audio"
-                      type="button"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        send({ type: "toggleMuteTab", id: tab.id });
-                      }}
-                    >
-                      <svg
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        class="tab-audio-icon"
-                      >
-                        <path
-                          d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
-                        />
-                      </svg>
-                    </button>
-                  {/if}
-                  <button
-                    class="tab-space-tag"
-                    title={`Space: ${SPACES.find((s) => s.id === (tabSpaceMap[tab.id] || "personal"))?.name} (Click to switch space)`}
-                    type="button"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      cycleTabSpace(tab.id);
+          {#snippet tabItem(tab: TabInfo, isGrouped: boolean, groupColor: string)}
+            <li
+              class:active={tab.id === activeTabId}
+              class:discarded={tab.discarded}
+              class:keyboard-selected={tab.id === keyboardSelectedTabId}
+              class:tab-in-group={isGrouped}
+              style={isGrouped ? `--group-accent: ${groupColor}` : ''}
+              draggable="true"
+              ondragstart={(e) => onDragStart(e, tab.id)}
+              ondragover={(e) => e.preventDefault()}
+              ondrop={(e) => onDrop(e, 0)}
+            >
+              <button
+                class="tab-row"
+                onclick={() => switchTo(tab.id)}
+                title={`${tab.title || (tab.url === "about:blank" ? "New Tab" : tab.url)}\n${tab.url}`}
+              >
+                {#if tab.favicon}
+                  <img
+                    src={tab.favicon}
+                    alt=""
+                    class="favicon"
+                    onerror={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
-                  >
-                    <span
-                      class="space-indicator-dot"
-                      style="background: {SPACES.find(
-                        (s) => s.id === (tabSpaceMap[tab.id] || 'personal'),
-                      )?.color}"
-                    ></span>
-                  </button>
-                  <button
-                    class="tab-pin-btn"
-                    title="Pin tab"
-                    type="button"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      send({ type: "pinTab", id: tab.id, pinned: true });
-                    }}
-                  >
-                    <svg
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      class="tab-pin-icon"
-                    >
-                      <path
-                        d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"
-                        stroke-width="1.2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
+                  />
+                {:else}
+                  <span class="favicon-initial">{domainInitial(tab.url)}</span>
+                {/if}
+                <span class="title">
+                  {tab.title || (tab.url === "about:blank" ? "New Tab" : tab.url) || "New Tab"}
+                </span>
+                {#if tab.audible}
+                  <span class="pill audio" title="Playing audio">
+                    <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
+                      <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"/>
                     </svg>
-                  </button>
-                  {#if !tab.discarded && tab.id !== activeTabId}
-                    <button
-                      class="tab-sleep-btn"
-                      title="Hibernate tab to free memory"
-                      type="button"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        hibernateTab(tab.id);
-                      }}
-                    >
-                      ☾
-                    </button>
-                  {/if}
+                    Audio
+                  </span>
+                {/if}
+                {#if tab.discarded}
+                  <span class="pill sleep" title="Tab sleeping to save memory. Click to wake.">
+                    ☾ Sleeping
+                  </span>
+                {/if}
+              </button>
+              {#if tab.audible}
+                <button
+                  class="tab-audio-btn"
+                  title="Mute / Unmute tab audio"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    send({ type: "toggleMuteTab", id: tab.id });
+                  }}
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="tab-audio-icon">
+                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"/>
+                  </svg>
+                </button>
+              {/if}
+              {#if isGrouped}
+                <button
+                  class="tab-group-btn"
+                  title="Remove tab from this group"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    removeTabFromGroup(tab.id);
+                  }}
+                >
+                  <span class="tab-group-icon">⤺</span>
+                </button>
+              {:else if tabGroups.length > 0}
+                <select
+                  class="tab-group-select"
+                  value=""
+                  title="Add to group..."
+                  onclick={(e) => e.stopPropagation()}
+                  onchange={(e) => {
+                    e.stopPropagation();
+                    const val = (e.currentTarget as HTMLSelectElement).value;
+                    if (val) assignTabToGroup(tab.id, val);
+                  }}
+                >
+                  <option value="" disabled selected>+</option>
+                  {#each tabGroups as g}
+                    <option value={g.id}>{g.name}</option>
+                  {/each}
+                </select>
+              {/if}
+              <button
+                class="tab-space-tag"
+                title={`Space: ${SPACES.find((s) => s.id === (tabSpaceMap[tab.id] || "personal"))?.name} (Click to switch space)`}
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  cycleTabSpace(tab.id);
+                }}
+              >
+                <span
+                  class="space-indicator-dot"
+                  style="background: {SPACES.find((s) => s.id === (tabSpaceMap[tab.id] || 'personal'))?.color}"
+                ></span>
+              </button>
+              <button
+                class="tab-pin-btn"
+                title="Pin tab"
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  send({ type: "pinTab", id: tab.id, pinned: true });
+                }}
+              >
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tab-pin-icon">
+                  <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              {#if !tab.discarded && tab.id !== activeTabId}
+                <button
+                  class="tab-sleep-btn"
+                  title="Hibernate tab to free memory"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    hibernateTab(tab.id);
+                  }}
+                >
+                  ☾
+                </button>
+              {/if}
+              <button
+                class="tab-close"
+                title="Close tab (Cmd+W)"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  send({ type: "closeTab", id: tab.id });
+                }}
+              >
+                ×
+              </button>
+            </li>
+          {/snippet}
+
+          <!-- Groups Section & Toolbar -->
+          <div class="tabs-subgroup-header" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span class="subgroup-title">TAB GROUPS</span>
+            <button
+              class="new-group-header-btn"
+              onclick={() => (isCreatingGroup = !isCreatingGroup)}
+              type="button"
+              title="Create a new Tab Group"
+            >
+              + New Group
+            </button>
+          </div>
+
+          {#if isCreatingGroup}
+            <div class="card create-group-card">
+              <input
+                type="text"
+                placeholder="Group name (e.g. Research, Project)..."
+                bind:value={newGroupName}
+                class="text-input sm"
+                onkeydown={(e) => { if (e.key === 'Enter') createTabGroup(); }}
+              />
+              <div class="color-picker-row">
+                {#each GROUP_PALETTE as color}
                   <button
-                    class="tab-close"
-                    title="Close tab (Cmd+W)"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      send({ type: "closeTab", id: tab.id });
-                    }}
+                    class="color-swatch-btn"
+                    class:selected={newGroupColor === color}
+                    style="background: {color};"
+                    onclick={() => (newGroupColor = color)}
+                    type="button"
+                    title={color}
+                  ></button>
+                {/each}
+              </div>
+              <div class="group-btn-actions">
+                <button class="primary-btn sm" onclick={createTabGroup} type="button">Create</button>
+                <button class="ghost-btn sm" onclick={() => (isCreatingGroup = false)} type="button">Cancel</button>
+              </div>
+            </div>
+          {/if}
+
+          {#each tabGroups as group (group.id)}
+            {@const gTabs = groupedTabsMap[group.id] || []}
+            <div class="tab-group-wrapper" style="--group-color: {group.color}">
+              <div class="tab-group-header">
+                <button
+                  class="group-toggle-btn"
+                  onclick={() => toggleGroupCollapse(group.id)}
+                  type="button"
+                  title={group.collapsed ? "Expand group" : "Collapse group"}
+                >
+                  <span class="group-chevron" class:collapsed={group.collapsed}>▾</span>
+                  <span class="group-dot" style="background: {group.color}"></span>
+                  <span class="group-name">{group.name}</span>
+                  <span class="group-count">{gTabs.length}</span>
+                </button>
+                <div class="group-actions">
+                  <button
+                    class="group-btn"
+                    onclick={() => addActiveTabToGroup(group.id)}
+                    type="button"
+                    title="Add active tab to this group"
                   >
-                    ×
+                    + Tab
                   </button>
-                </li>
+                  <button
+                    class="group-btn danger"
+                    onclick={() => deleteTabGroup(group.id)}
+                    type="button"
+                    title="Delete group (ungroups tabs)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {#if !group.collapsed}
+                {#if gTabs.length === 0}
+                  <div class="group-empty-hint">No tabs in this group yet</div>
+                {:else}
+                  <ul class="tabs-list grouped-tabs-list">
+                    {#each gTabs as tab (tab.id)}
+                      {@render tabItem(tab, true, group.color)}
+                    {/each}
+                  </ul>
+                {/if}
+              {/if}
+            </div>
+          {/each}
+
+          {#if ungroupedRegularTabs.length > 0}
+            <div class="tabs-subgroup-header" style="margin-top: 10px;">
+              <span class="subgroup-title">{tabGroups.length > 0 ? "OTHER TABS" : "ALL TABS"}</span>
+              <span class="subgroup-count">{ungroupedRegularTabs.length}</span>
+            </div>
+            <ul class="tabs-list">
+              {#each ungroupedRegularTabs as tab (tab.id)}
+                {@render tabItem(tab, false, "")}
               {/each}
             </ul>
           {/if}
@@ -1495,6 +1834,17 @@
           <button
             class:on={section === "extensions"}
             onclick={() => (section = "extensions")}>Extensions</button
+          >
+          <button
+            class:on={section === "scripts"}
+            onclick={() => {
+              section = "scripts";
+              send({ type: "getUserScripts" });
+            }}>Scripts</button
+          >
+          <button
+            class:on={section === "sync"}
+            onclick={() => (section = "sync")}>Sync</button
           >
           <button
             class:on={section === "shortcuts"}
@@ -2037,6 +2387,195 @@
               {/each}
             </div>
           {/if}
+        {:else if section === "scripts"}
+          <div class="section-title-row">
+            <div class="section-title">UserScripts (Tampermonkey Engine)</div>
+            <button
+              class="primary-btn sm"
+              onclick={openNewScriptEditor}
+              type="button"
+            >
+              + New Script
+            </button>
+          </div>
+
+          {#if isEditingScript}
+            <div class="card script-editor-card">
+              <div class="editor-header-row">
+                <span class="editor-title">Script Editor</span>
+                <input
+                  type="text"
+                  placeholder="Script Name"
+                  bind:value={scriptEditorName}
+                  class="text-input sm script-name-input"
+                />
+              </div>
+              <textarea
+                class="script-editor-textarea"
+                bind:value={scriptEditorCode}
+                rows="14"
+                spellcheck="false"
+              ></textarea>
+              <div class="editor-actions-row">
+                <button class="primary-btn sm" onclick={handleSaveScript} type="button">Save Script</button>
+                <button class="ghost-btn sm" onclick={() => (isEditingScript = false)} type="button">Cancel</button>
+              </div>
+            </div>
+          {/if}
+
+          <div class="card settings-card" style="margin-bottom: 12px;">
+            <p class="field-desc">
+              Peek executes lightweight <code>.user.js</code> scripts natively with zero Electron bloat. Supports <code>@match</code>, <code>@include</code>, <code>@run-at</code>, and <code>GM_*</code> APIs.
+            </p>
+          </div>
+
+          <div class="section-title">Installed Scripts ({userScripts.length})</div>
+          {#if userScripts.length === 0}
+            <div class="card empty-card">
+              <div class="empty-icon">📜</div>
+              <p class="note">No userscripts installed yet. Click "+ New Script" above or drop a <code>.user.js</code> file into your profile directory.</p>
+            </div>
+          {:else}
+            <div class="scripts-list">
+              {#each userScripts as script (script.id)}
+                <div class="card script-card">
+                  <div class="script-header">
+                    <div>
+                      <div class="script-title">
+                        {script.name}
+                        <span class="script-version">v{script.version}</span>
+                      </div>
+                      {#if script.description}
+                        <div class="script-desc">{script.description}</div>
+                      {/if}
+                    </div>
+                    <div class="script-controls">
+                      <label class="switch">
+                        <input
+                          type="checkbox"
+                          checked={script.enabled}
+                          onchange={() => handleToggleScript(script.id, script.enabled)}
+                        />
+                        <span class="slider"></span>
+                      </label>
+                      <button
+                        class="danger-icon-btn"
+                        onclick={() => handleDeleteScript(script.id)}
+                        title="Delete script"
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="script-meta-badges">
+                    <span class="badge run-at">{script.runAt}</span>
+                    {#each script.matchPatterns.slice(0, 3) as pattern}
+                      <span class="badge pattern">{pattern}</span>
+                    {/each}
+                    {#if script.matchPatterns.length > 3}
+                      <span class="badge pattern">+{script.matchPatterns.length - 3} more</span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+        {:else if section === "sync"}
+          <div class="section-title">Encrypted Cloud Sync (E2EE)</div>
+          <div class="card settings-card">
+            <div class="sync-security-badge-row">
+              <span class="security-badge">
+                <svg viewBox="0 0 16 16" fill="currentColor" class="security-icon">
+                  <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-.5V4.5A3.5 3.5 0 0 0 8 1zm2 5H6V4.5a2 2 0 1 1 4 0V6z"/>
+                </svg>
+                AES-256-GCM + PBKDF2 Zero-Knowledge
+              </span>
+              <span class="device-id-badge" title="Local Device ID">{deviceId}</span>
+            </div>
+            <p class="field-desc" style="margin-top: 8px;">
+              Your bookmarks, notes, pinned websites, and tab groups are encrypted on your device with your secret passphrase before leaving Peek. No server ever sees your plaintext.
+            </p>
+
+            <div class="field" style="margin-top: 12px;">
+              <label for="sync-passphrase">Encryption Passphrase</label>
+              <div class="input-action-row">
+                <input
+                  id="sync-passphrase"
+                  type={showPassphrase ? "text" : "password"}
+                  placeholder="Enter strong passphrase..."
+                  bind:value={syncPassphrase}
+                  class="text-input"
+                />
+                <button
+                  class="secondary-btn sm"
+                  type="button"
+                  onclick={() => (showPassphrase = !showPassphrase)}
+                >
+                  {showPassphrase ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {#if syncStatus}
+              <div class="sync-status-msg success">{syncStatus}</div>
+            {/if}
+            {#if syncError}
+              <div class="sync-status-msg error">{syncError}</div>
+            {/if}
+
+            <div class="sync-stats-row">
+              <span class="sync-stat">★ {bookmarksList.length} Bookmarks</span>
+              <span class="sync-stat">◫ {tabGroups.length} Groups</span>
+              <span class="sync-stat">✎ {noteWords} Words</span>
+              {#if lastSyncedTime}
+                <span class="sync-stat muted">Synced {formatRelativeTime(lastSyncedTime)}</span>
+              {/if}
+            </div>
+
+            <div class="group-btn-actions" style="margin-top: 14px;">
+              <button class="primary-btn" onclick={handleExportSync} type="button">
+                Export Encrypted Bundle
+              </button>
+            </div>
+          </div>
+
+          {#if syncBundleOutput}
+            <div class="section-title" style="margin-top: 16px;">Encrypted Bundle Token</div>
+            <div class="card settings-card">
+              <textarea
+                class="token-textarea"
+                readonly
+                rows="4"
+                value={syncBundleOutput}
+              ></textarea>
+              <p class="field-desc" style="font-size: 11px;">
+                Token is ready to transfer or paste into another Peek instance with the same passphrase.
+              </p>
+            </div>
+          {/if}
+
+          <div class="section-title" style="margin-top: 16px;">Import Encrypted Bundle</div>
+          <div class="card settings-card">
+            <textarea
+              class="token-textarea"
+              placeholder="Paste encrypted sync token from another Peek device..."
+              rows="4"
+              bind:value={syncBundleInput}
+            ></textarea>
+            <div class="group-btn-actions" style="margin-top: 10px;">
+              <button class="primary-btn" onclick={handleImportSync} type="button">
+                Decrypt & Merge
+              </button>
+              {#if syncBundleInput}
+                <button class="ghost-btn sm" onclick={() => (syncBundleInput = "")} type="button">
+                  Clear
+                </button>
+              {/if}
+            </div>
+          </div>
         {:else if section === "shortcuts"}
           <div class="section-title">Navigation & Window</div>
           <div class="shortcut-list card settings-card">
@@ -2397,7 +2936,7 @@
   /* Settings Navigation */
   .settings-nav {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 4px;
     padding: 3px;
     background: var(--surface-2);
@@ -4126,5 +4665,417 @@
     color: var(--muted);
     opacity: 0.6;
     line-height: 1.5;
+  }
+
+  /* Tab Groups */
+  .new-group-header-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+  }
+  .new-group-header-btn:hover {
+    background: var(--hover);
+  }
+
+  .create-group-card {
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  .color-picker-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .color-swatch-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  .color-swatch-btn.selected {
+    transform: scale(1.2);
+    border-color: #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+
+  .group-btn-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .tab-group-wrapper {
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface) 40%, transparent);
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+  }
+
+  .tab-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .group-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    flex: 1;
+    text-align: left;
+  }
+
+  .group-chevron {
+    font-size: 10px;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+    display: inline-block;
+  }
+  .group-chevron.collapsed {
+    transform: rotate(-90deg);
+  }
+
+  .group-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .group-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .group-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--surface);
+    padding: 1px 5px;
+    border-radius: 8px;
+  }
+
+  .group-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .group-btn {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 2px 5px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .group-btn:hover {
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .group-btn.danger:hover {
+    color: #ef4444;
+    border-color: #ef4444;
+  }
+
+  .group-empty-hint {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .grouped-tabs-list {
+    padding-left: 4px;
+  }
+
+  .tab-in-group {
+    border-left: 2.5px solid var(--group-accent, var(--accent)) !important;
+    margin-left: 4px !important;
+    border-radius: 0 6px 6px 0 !important;
+  }
+
+  .tab-group-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color 0.12s ease;
+  }
+  .tab-group-btn:hover {
+    color: #ef4444;
+  }
+
+  .tab-group-select {
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+    color: var(--muted);
+    cursor: pointer;
+    outline: none;
+    max-width: 44px;
+  }
+  .tab-group-select:hover {
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  /* UserScripts */
+  .section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .script-editor-card {
+    padding: 10px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  .editor-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .editor-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .script-name-input {
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .script-editor-textarea {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.45;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    outline: none;
+    resize: vertical;
+    white-space: pre;
+    tab-size: 2;
+  }
+  .script-editor-textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .editor-actions-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .scripts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .script-card {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .script-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .script-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .script-version {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .script-desc {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+
+  .script-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .script-meta-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+  }
+
+  .badge.run-at {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+  }
+
+  .badge.pattern {
+    background: var(--surface-2);
+    color: var(--muted);
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Encrypted Cloud Sync */
+  .sync-security-badge-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #10b981;
+    background: color-mix(in srgb, #10b981 12%, transparent);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, #10b981 25%, transparent);
+  }
+
+  .security-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .device-id-badge {
+    font-size: 10px;
+    font-family: ui-monospace, monospace;
+    color: var(--muted);
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .sync-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 11.5px;
+    color: var(--text);
+  }
+
+  .sync-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-2);
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-weight: 500;
+  }
+  .sync-stat.muted {
+    color: var(--muted);
+  }
+
+  .sync-status-msg {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .sync-status-msg.success {
+    background: color-mix(in srgb, #10b981 15%, transparent);
+    color: #10b981;
+    border: 1px solid color-mix(in srgb, #10b981 30%, transparent);
+  }
+  .sync-status-msg.error {
+    background: color-mix(in srgb, #ef4444 15%, transparent);
+    color: #ef4444;
+    border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  }
+
+  .token-textarea {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    outline: none;
+    resize: none;
+    word-break: break-all;
+  }
+  .token-textarea:focus {
+    border-color: var(--accent);
   }
 </style>
