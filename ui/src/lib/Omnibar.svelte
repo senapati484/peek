@@ -292,19 +292,6 @@
   let zenHovered = $state(false);
   let zenHoverTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Page Tools Popover State
-  let pageToolsOpen = $state(false);
-  function togglePageTools() {
-    pageToolsOpen = !pageToolsOpen;
-    send({ type: 'setOmnibarOpen', open: pageToolsOpen || focused });
-  }
-  function closePageTools() {
-    if (pageToolsOpen) {
-      pageToolsOpen = false;
-      send({ type: 'setOmnibarOpen', open: focused });
-    }
-  }
-
   // Pinned Websites State
   let pinnedSites = $state<PinnedSite[]>([]);
   let showAddPinModal = $state(false);
@@ -393,9 +380,6 @@
     if (suggestTimer) clearTimeout(suggestTimer);
     suggestions = [];
     selected = -1;
-    if (pageToolsOpen) {
-      pageToolsOpen = false;
-    }
     if (focused) {
       focused = false;
       send({ type: 'setOmnibarOpen', open: false });
@@ -829,11 +813,6 @@
       }
 
       if (event.key === 'Escape') {
-        if (pageToolsOpen) {
-          event.preventDefault();
-          closePageTools();
-          return;
-        }
         if (isPreviewingPin) {
           event.preventDefault();
           dismissPinPreview();
@@ -1451,27 +1430,6 @@
               <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-
-          <!-- Page Tools Popover Trigger (⋯) -->
-          <button
-            class="tool-btn page-tools-btn"
-            class:active={pageToolsOpen}
-            title="Page Tools & Privacy"
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              togglePageTools();
-            }}
-            aria-expanded={pageToolsOpen}
-            aria-haspopup="menu"
-            aria-label="Open Page Tools"
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
-              <circle cx="3" cy="8" r="1.3" fill="currentColor"/>
-              <circle cx="8" cy="8" r="1.3" fill="currentColor"/>
-              <circle cx="13" cy="8" r="1.3" fill="currentColor"/>
-            </svg>
-          </button>
         {/if}
 
         <!-- Profile Button (Always visible) -->
@@ -1512,7 +1470,7 @@
         {/if}
       </div>
 
-      <!-- Inline Bar Toast Feedback Pill (100% visible inside 36px top bar!) -->
+      <!-- Inline Bar Toast Feedback Pill (100% visible inside top bar!) -->
       {#if toastMessage}
         <div class="bar-toast-pill" role="status" aria-live="polite">
           <span class="bar-toast-dot"></span>
@@ -1525,104 +1483,6 @@
         <div class="bar-tab-hud-pill" role="status" aria-live="polite">
           <span class="tab-hud-badge">Tab {hudTabIndex} of {hudTabTotal}</span>
           <span class="tab-hud-title">{hudTabTitle}</span>
-        </div>
-      {/if}
-
-      <!-- Page Tools Popover Menu -->
-      {#if pageToolsOpen}
-        <button
-          class="popover-backdrop"
-          type="button"
-          onclick={closePageTools}
-          aria-label="Close page tools"
-        ></button>
-        <div class="page-tools-popover" role="menu">
-          <div class="popover-header">
-            <span class="popover-title">Page Tools</span>
-            <span class="popover-url-host">{cleanDomain(activeUrl)}</span>
-          </div>
-
-          <div class="popover-group">
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); copyCleanLink(); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <path d="M6.5 9.5a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-1 1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M9.5 6.5a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l1-1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="popover-label">Copy Clean URL</span>
-              <kbd class="popover-shortcut">⌘⇧C</kbd>
-            </button>
-
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); send({ type: 'copyMarkdownLink' }); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke-width="1.2"/>
-                <path d="M4 10V6l2 2.5L8 6v4M11.5 6v4M10 8.5l1.5 1.5 1.5-1.5" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="popover-label">Copy Markdown Link</span>
-              <kbd class="popover-shortcut">⌘⌥C</kbd>
-            </button>
-
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); send({ type: 'togglePiP' }); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <rect x="2" y="3" width="12" height="9" rx="1.5" stroke-width="1.2"/>
-                <rect x="8" y="7" width="5" height="4" rx="1" fill="currentColor" stroke-width="0.8"/>
-              </svg>
-              <span class="popover-label">Picture-in-Picture</span>
-              <kbd class="popover-shortcut">⌘⇧P</kbd>
-            </button>
-
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); send({ type: 'toggleZenMode' }); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="popover-label">Zen / Ghost Canvas</span>
-              <kbd class="popover-shortcut">⌘.</kbd>
-            </button>
-          </div>
-
-          <div class="popover-divider"></div>
-
-          <div class="popover-group">
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); send({ type: 'setDrawer', open: true, side: 'right', section: 'blocking' }); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <path d="M8 1.5L2.5 3.8v4.2c0 3.7 2.3 6.3 5.5 7 3.2-.7 5.5-3.3 5.5-7V3.8L8 1.5z" stroke-width="1.5" stroke-linejoin="round" />
-              </svg>
-              <span class="popover-label">Adblock & Privacy</span>
-              <span class="popover-badge">Active</span>
-            </button>
-
-            <button
-              class="popover-item"
-              type="button"
-              onclick={() => { closePageTools(); send({ type: 'setDrawer', open: true, side: 'right', section: 'general' }); }}
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="popover-icon">
-                <circle cx="8" cy="8" r="3" stroke-width="1.3"/>
-                <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke-width="1.2" stroke-linecap="round"/>
-              </svg>
-              <span class="popover-label">Settings & Tools</span>
-              <kbd class="popover-shortcut">⌘⇧]</kbd>
-            </button>
-          </div>
         </div>
       {/if}
 
@@ -2366,12 +2226,12 @@
   .bar-container {
     position: relative;
     width: 100%;
-    height: 36px;
+    height: 100%;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
-    padding: 0 10px;
+    padding: 0 14px;
     box-sizing: border-box;
     pointer-events: auto;
   }
@@ -2379,11 +2239,11 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 28px;
+    gap: 8px;
+    height: clamp(32px, calc(100% - 10px), 38px);
     width: 100%;
     margin: 0;
-    padding: 0 10px;
+    padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 9999px;
     background: var(--surface);
@@ -2429,9 +2289,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
     color: var(--muted);
     cursor: pointer;
     flex-shrink: 0;
@@ -2444,8 +2304,8 @@
   }
 
   .nav-icon {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
   }
 
   .reload-btn {
@@ -2456,8 +2316,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 4px;
     flex-shrink: 0;
     color: var(--muted);
@@ -2472,8 +2332,8 @@
   }
 
   .lock-icon {
-    width: 12px;
-    height: 12px;
+    width: 13px;
+    height: 13px;
   }
 
   .bar input {
@@ -2484,9 +2344,10 @@
     outline: none;
     background: transparent;
     color: var(--text);
-    font-size: 12.5px;
-    letter-spacing: 0.01em;
-    padding: 0 4px;
+    font-size: 13px;
+    font-weight: 450;
+    letter-spacing: -0.005em;
+    padding: 0 6px;
   }
 
   .bar input::placeholder {
@@ -2498,11 +2359,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 14px;
     cursor: pointer;
     flex-shrink: 0;
     margin-right: 4px;
@@ -2518,9 +2379,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
     color: var(--muted);
     cursor: pointer;
     flex-shrink: 0;
@@ -2530,6 +2391,11 @@
   .tool-btn:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  .tool-icon {
+    width: 15px;
+    height: 15px;
   }
 
   .dark-mode-btn.active-dark {
@@ -2859,145 +2725,5 @@
     color: #f59e0b;
     background: rgba(245, 158, 11, 0.16);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.22);
-  }
-
-  /* Page Tools Popover */
-  .popover-backdrop {
-    position: fixed;
-    inset: 0;
-    background: transparent;
-    z-index: 999;
-    border: none;
-    outline: none;
-    cursor: default;
-    width: 100vw;
-    height: 100vh;
-  }
-
-  .page-tools-popover {
-    position: absolute;
-    top: 36px;
-    right: 10px;
-    min-width: 230px;
-    background: color-mix(in srgb, var(--panel) 94%, #000);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    padding: 6px;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    animation: popoverFade 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  @keyframes popoverFade {
-    from {
-      opacity: 0;
-      transform: translateY(-6px) scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  .popover-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 8px 4px;
-    margin-bottom: 2px;
-  }
-
-  .popover-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .popover-url-host {
-    font-size: 10.5px;
-    color: var(--muted);
-    max-width: 130px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .popover-group {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .popover-item {
-    all: unset;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 6px 8px;
-    border-radius: 7px;
-    font-size: 12px;
-    color: var(--text);
-    transition: background 0.12s, color 0.12s;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  .popover-item:hover {
-    background: var(--surface-2);
-    color: #ffffff;
-  }
-
-  .popover-icon {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
-  .popover-item:hover .popover-icon {
-    color: var(--text);
-  }
-
-  .popover-label {
-    flex: 1;
-    font-weight: 450;
-  }
-
-  .popover-shortcut {
-    font-size: 10.5px;
-    color: var(--muted);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-family: inherit;
-  }
-
-  .popover-badge {
-    font-size: 10px;
-    font-weight: 600;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.14);
-    padding: 2px 6px;
-    border-radius: 9999px;
-  }
-
-  .popover-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 4px 0;
-  }
-
-  .tool-btn.page-tools-btn.active {
-    background: var(--surface-2);
-    color: var(--text);
   }
 </style>

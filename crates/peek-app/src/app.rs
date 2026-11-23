@@ -27,7 +27,8 @@ use url::Url;
 use crate::assets::{PageAssets, UiAssets};
 use crate::inject;
 
-pub const BAR_HEIGHT: f64 = 36.0;
+pub const BAR_HEIGHT: f64 = 42.0;
+pub const BAR_HEIGHT_FULLSCREEN: f64 = 50.0;
 
 pub fn default_user_agent() -> &'static str {
     #[cfg(target_os = "windows")]
@@ -958,7 +959,8 @@ impl App {
                 let (w, h) = self.window_size;
                 let config = self.settings.preview.clone();
                 let elapsed = config.hover_delay;
-                let page_height = (h - BAR_HEIGHT).max(1.0);
+                let bar_h = self.bar_height();
+                let page_height = (h - bar_h).max(1.0);
                 match self
                     .preview
                     .hover(url, rect, elapsed, forced, &config, (w, page_height))
@@ -967,7 +969,7 @@ impl App {
                         self.preview_hide_at = None;
                         let placed = Bounds::new(
                             bounds.x,
-                            bounds.y + BAR_HEIGHT,
+                            bounds.y + bar_h,
                             bounds.width,
                             bounds.height,
                         );
@@ -1683,19 +1685,28 @@ impl App {
             .unwrap_or(true)
     }
 
+    pub fn bar_height(&self) -> f64 {
+        if self.window.fullscreen().is_some() {
+            BAR_HEIGHT_FULLSCREEN
+        } else {
+            BAR_HEIGHT
+        }
+    }
+
     fn chrome_bounds(&self) -> Bounds {
         let (w, h) = self.window_size;
+        let bar_h = self.bar_height();
         if self.is_active_blank() {
             Bounds::new(0.0, 0.0, w, h)
         } else if self.is_zen_mode {
             let height = if self.omnibar_open {
-                BAR_HEIGHT + OMNIBAR_PANEL_HEIGHT
+                bar_h + OMNIBAR_PANEL_HEIGHT
             } else {
-                BAR_HEIGHT
+                bar_h
             };
             Bounds::new(0.0, 0.0, w, height)
         } else {
-            let height = BAR_HEIGHT
+            let height = bar_h
                 + if self.omnibar_open {
                     OMNIBAR_PANEL_HEIGHT
                 } else {
@@ -1707,10 +1718,11 @@ impl App {
 
     fn page_bounds(&self) -> Bounds {
         let (w, h) = self.window_size;
+        let bar_h = self.bar_height();
         if self.is_zen_mode {
             Bounds::new(0.0, 0.0, w, h)
         } else {
-            Bounds::new(0.0, BAR_HEIGHT, w, (h - BAR_HEIGHT).max(0.0))
+            Bounds::new(0.0, bar_h, w, (h - bar_h).max(0.0))
         }
     }
 
