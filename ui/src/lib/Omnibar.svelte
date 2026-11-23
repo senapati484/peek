@@ -1136,6 +1136,29 @@
             </button>
           </div>
         </div>
+
+        <!-- Minimalist Keyboard & Gesture Affordances -->
+        <div class="start-hints-row" aria-label="Shortcuts and Gestures">
+          <span class="start-hint-pill" title="Press ⌘K or type > for Command Palette">
+            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">K</kbd> Commands
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill">
+            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
+            <kbd class="start-kbd">Space</kbd> Link Peek
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
+            <span class="start-hint-icon">⇄</span> Swipe to Switch
+          </span>
+          <span class="start-hint-dot">•</span>
+          <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
+            <span class="start-hint-icon">⇥</span> Edge Drawers
+          </span>
+        </div>
       {/if}
 
       {#if showAddPinModal}
@@ -1598,13 +1621,13 @@
     gap: 7px;
     padding: 5px 12px 5px 10px;
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--muted);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-sm);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     transition: all 0.16s ease;
@@ -1615,7 +1638,7 @@
     color: var(--text);
     border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow);
   }
 
   .corner-icon {
@@ -1803,17 +1826,17 @@
     position: relative;
     z-index: 100;
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    background: var(--panel);
     border: 1px solid var(--border);
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: var(--shadow-lg), 0 2px 8px rgba(15, 23, 42, 0.04);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .search-box:focus-within {
-    border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
-    box-shadow: 0 0 0 3px var(--accent-soft), 0 14px 40px rgba(0, 0, 0, 0.6), var(--shadow);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-lg);
     background: var(--panel);
     transform: translateY(-1px);
   }
@@ -1879,7 +1902,7 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     background: var(--panel);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-lg);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
     padding: 8px;
@@ -1984,12 +2007,12 @@
     justify-content: center;
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    box-shadow: var(--shadow-sm);
     transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .pin-card:hover .pin-icon-box {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 0 0 1px var(--accent-glow);
+    box-shadow: var(--shadow), 0 0 0 1px var(--accent-glow);
     border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
     transform: scale(1.05);
   }
@@ -2073,6 +2096,59 @@
 
   .add-pin-card:hover .add-icon {
     color: var(--accent);
+  }
+
+  /* Minimalist Keyboard & Gesture Affordances */
+  .start-hints-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 24px;
+    user-select: none;
+    pointer-events: auto;
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .start-hint-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: -0.01em;
+    padding: 3px 6px;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+  }
+
+  .start-hint-pill:hover {
+    color: var(--text-secondary);
+  }
+
+  .start-kbd {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", inherit;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.5px 5.5px;
+    box-shadow: var(--shadow-sm);
+    line-height: 1.2;
+  }
+
+  .start-hint-dot {
+    font-size: 10px;
+    color: var(--border);
+    user-select: none;
+  }
+
+  .start-hint-icon {
+    font-size: 12px;
+    opacity: 0.85;
   }
 
   /* Add Pin Modal */
@@ -2207,8 +2283,8 @@
     position: relative;
     width: 100%;
     height: 36px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     padding: 0 10px;
@@ -2226,7 +2302,7 @@
     padding: 0 10px;
     border: 1px solid var(--border);
     border-radius: 9999px;
-    background: var(--surface-2);
+    background: var(--surface);
     box-shadow: var(--shadow-sm);
     transition: all 0.15s ease;
   }
