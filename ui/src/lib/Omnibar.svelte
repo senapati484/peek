@@ -915,6 +915,94 @@
   {#if isStartPage}
     <!-- Center Start Page Layout: Pure Minimalist Search & Pinned Speed Dial -->
     <div class="start-center">
+      {#if !drawerOpen}
+        <!-- Left Corner: Quick Tabs Affordance -->
+        <div class="start-corner left">
+          <button
+            class="start-corner-pill"
+            title="Open Tabs (or hover left edge) • ⌘⇧["
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+            }}
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
+              <rect x="2" y="2.5" width="12" height="11" rx="2" stroke-width="1.3" />
+              <path d="M6 2.5v11" stroke-width="1.3" />
+            </svg>
+            <span class="corner-text">Tabs</span>
+            <kbd class="corner-kbd">⌘⇧[</kbd>
+          </button>
+        </div>
+
+        <!-- Right Corner: Quick Settings & Profile Affordances -->
+        <div class="start-corner right">
+          <button
+            class="start-corner-pill"
+            title="Open Settings & Tools (or hover right edge) • ⌘⇧]"
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+            }}
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
+              <circle cx="8" cy="8" r="2.5" stroke-width="1.3" />
+              <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+            <span class="corner-text">Settings</span>
+            <kbd class="corner-kbd">⌘⇧]</kbd>
+          </button>
+
+          <button
+            class="start-profile-chip"
+            title={`Active Profile: ${activeProfile} (Click to switch)`}
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
+            }}
+          >
+            <span class="profile-avatar-dot">{profileInitial}</span>
+            <span class="profile-chip-name">{activeProfile}</span>
+          </button>
+        </div>
+
+        <!-- Left & Right Edge Touchpoint Indicators -->
+        <button
+          class="edge-hover-indicator left"
+          title="Hover or click left edge to view Tabs (⌘⇧[)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+          }}
+          onmouseenter={() => {
+            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+          }}
+          aria-label="Open Tabs Drawer"
+        >
+          <span class="edge-indicator-bar"></span>
+        </button>
+
+        <button
+          class="edge-hover-indicator right"
+          title="Hover or click right edge to view Settings (⌘⇧])"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+          }}
+          onmouseenter={() => {
+            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
+          }}
+          aria-label="Open Settings Drawer"
+        >
+          <span class="edge-indicator-bar"></span>
+        </button>
+      {/if}
+
       <div class="hero-brand">
         <div class="hero-ambient-glow" aria-hidden="true"></div>
         <div class="logo-wrapper">
@@ -1482,6 +1570,171 @@
     padding: 32px 24px;
     background: var(--bg);
     animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Corner Affordances: Tabs (Left) and Settings & Profile (Right) */
+  .start-corner {
+    position: absolute;
+    top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 20;
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .start-corner.left {
+    left: 24px;
+  }
+
+  .start-corner.right {
+    right: 24px;
+  }
+
+  .start-corner-pill {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px 5px 10px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: all 0.16s ease;
+  }
+
+  .start-corner-pill:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .corner-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+    transition: color 0.15s ease;
+  }
+
+  .start-corner-pill:hover .corner-icon {
+    color: var(--accent);
+  }
+
+  .corner-text {
+    letter-spacing: -0.01em;
+  }
+
+  .corner-kbd {
+    all: unset;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--border-subtle);
+    margin-left: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  .start-corner-pill:hover .corner-kbd {
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .start-profile-chip {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 11px 4px 5px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--panel) 75%, transparent);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all 0.15s ease;
+  }
+
+  .start-profile-chip:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .profile-avatar-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+
+  .profile-chip-name {
+    letter-spacing: -0.01em;
+  }
+
+  /* Edge touchpoint indicators */
+  .edge-hover-indicator {
+    all: unset;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 25;
+    opacity: 0.45;
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .edge-hover-indicator.left {
+    left: 4px;
+  }
+
+  .edge-hover-indicator.right {
+    right: 4px;
+  }
+
+  .edge-hover-indicator:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.2);
+  }
+
+  .edge-indicator-bar {
+    width: 3.5px;
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--border);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .edge-hover-indicator:hover .edge-indicator-bar {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
   }
 
   @keyframes fadeIn {
