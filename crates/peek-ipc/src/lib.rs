@@ -489,6 +489,8 @@ pub enum PageEvent {
     },
     /// An in-page SPA navigation (pushState, replaceState, popstate, hashchange).
     UrlChanged { url: String },
+    /// Smart night mode state update from in-page script.
+    InvertDarkState { active: bool, message: String },
 }
 
 /// Host-level shortcuts reported by injected page scripts.

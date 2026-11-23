@@ -684,25 +684,89 @@ const PAGE_SCRIPT: &str = r##"
     }
   };
 
+  window.__peekCheckInvertDark = function () {
+    try {
+      var existing = document.getElementById("__peek_invert_dark__");
+      send({ type: "invertDarkState", active: !!existing, message: "" });
+    } catch (e) {}
+  };
+
   window.__peekToggleInvertDark = function () {
     try {
       var existing = document.getElementById("__peek_invert_dark__");
       if (existing) {
         existing.remove();
+        send({ type: "invertDarkState", active: false, message: "Night mode disabled" });
         return false;
       }
+
+      function parseRgb(color) {
+        if (!color || color === "transparent" || color === "inherit" || color === "rgba(0, 0, 0, 0)") return null;
+        var m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+        if (m) {
+          return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
+        }
+        return null;
+      }
+
+      var isDark = false;
+      var targets = [document.body, document.documentElement];
+      var rgb = null;
+      for (var i = 0; i < targets.length; i++) {
+        if (!targets[i]) continue;
+        var cs = window.getComputedStyle(targets[i]);
+        if (cs) {
+          rgb = parseRgb(cs.backgroundColor);
+          if (rgb && (rgb.r > 0 || rgb.g > 0 || rgb.b > 0)) break;
+        }
+      }
+
+      if (rgb) {
+        var lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+        if (lum < 65) isDark = true;
+      } else {
+        var csDoc = window.getComputedStyle(document.documentElement);
+        if (csDoc) {
+          var docRgb = parseRgb(csDoc.backgroundColor);
+          if (docRgb && (0.299 * docRgb.r + 0.587 * docRgb.g + 0.114 * docRgb.b) < 65) {
+            isDark = true;
+          } else if (csDoc.colorScheme === "dark") {
+            isDark = true;
+          }
+        }
+      }
+
       var style = document.createElement("style");
       style.id = "__peek_invert_dark__";
+
+      if (isDark) {
+        // Site already has a dark theme (e.g. YouTube in dark theme). Do not invert!
+        // Enforce native dark color scheme cleanly without color inversion.
+        style.textContent = `
+          html, body {
+            color-scheme: dark !important;
+          }
+        `;
+        document.documentElement.appendChild(style);
+        send({ type: "invertDarkState", active: true, message: "Native dark theme active (site is already dark)" });
+        return true;
+      }
+
+      // Light website: apply calibrated soft inversion curve and re-invert ALL media including iframes & video embeds
       style.textContent = `
         html {
-          filter: invert(1) hue-rotate(180deg) !important;
-          background: #111 !important;
+          filter: invert(90%) hue-rotate(180deg) contrast(94%) !important;
+          background: #121214 !important;
         }
-        img, picture, video, canvas, svg, [style*="background-image"] {
-          filter: invert(1) hue-rotate(180deg) !important;
+        img, picture, video, canvas, iframe, embed, object {
+          filter: invert(100%) hue-rotate(180deg) contrast(106%) !important;
+        }
+        picture img, iframe img {
+          filter: none !important;
         }
       `;
       document.documentElement.appendChild(style);
+      send({ type: "invertDarkState", active: true, message: "Night mode enabled" });
       return true;
     } catch (e) {
       return false;

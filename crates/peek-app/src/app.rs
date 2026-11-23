@@ -867,11 +867,11 @@ impl App {
             }
             Command::ToggleInvertDark => {
                 if let Some(view) = self.active_view() {
-                    let _ = self.engine.evaluate(view, "if (window.__peekToggleInvertDark) window.__peekToggleInvertDark();");
+                    let _ = self.engine.evaluate(
+                        view,
+                        "if (window.__peekToggleInvertDark) window.__peekToggleInvertDark();",
+                    );
                 }
-                self.send(Event::Toast {
-                    message: "Toggled smart dark mode (⌘⇧D)".into(),
-                });
             }
             Command::TogglePiP => {
                 if let Some(view) = self.active_view() {
@@ -1058,6 +1058,12 @@ impl App {
                         });
                         self.push_tabs();
                     }
+                }
+            }
+            PageEvent::InvertDarkState { active, message } => {
+                self.send(Event::InvertDarkState { active });
+                if !message.trim().is_empty() {
+                    self.send(Event::Toast { message });
                 }
             }
             PageEvent::ExtensionMessage { .. } => {}
@@ -1304,6 +1310,10 @@ impl App {
                         if should_show {
                             let _ = self.engine.set_bounds(view, self.page_bounds());
                             let _ = self.engine.focus(view);
+                            let _ = self.engine.evaluate(
+                                view,
+                                "if (window.__peekCheckInvertDark) window.__peekCheckInvertDark();",
+                            );
                         }
                     }
                 }
