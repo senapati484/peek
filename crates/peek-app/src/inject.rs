@@ -232,7 +232,7 @@ const PAGE_SCRIPT: &str = r##"
       if (key === "r") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleReaderMode" }); return; }
       if (key === "d") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleInvertDark" }); return; }
       if (key === "p") { ev.preventDefault(); send({ type: "shortcut", shortcut: "togglePiP" }); return; }
-      if (key === "f") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleZenMode" }); return; }
+      if (key === "f") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleFullscreen" }); return; }
     }
     if (mod && ev.altKey && !ev.shiftKey) {
       if (key === "c") { ev.preventDefault(); send({ type: "shortcut", shortcut: "copyMarkdownLink" }); return; }

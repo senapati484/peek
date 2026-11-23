@@ -5,6 +5,7 @@
 
   interface Props {
     isZenMode: boolean;
+    isFullscreen?: boolean;
     zenHovered: boolean;
     focused: boolean;
     loading: boolean;
@@ -37,6 +38,7 @@
 
   let {
     isZenMode,
+    isFullscreen = false,
     zenHovered = $bindable(false),
     focused = $bindable(false),
     loading,
@@ -87,6 +89,7 @@
   role="toolbar"
   tabindex="-1"
   aria-label="Address bar"
+  class:fullscreen={isFullscreen}
   class:zen-mode={isZenMode}
   class:zen-revealed={zenHovered || focused}
   onmouseenter={() => {
@@ -310,21 +313,27 @@
       </svg>
     </button>
 
-    <!-- Zen Mode / Ghost Canvas Button -->
+    <!-- Fullscreen Mode Button -->
     <button
-      class="tool-btn zen-btn"
-      class:active-zen={isZenMode}
-      title={isZenMode ? 'Exit Zen Mode (⌘.)' : 'Zen Mode / Ghost Canvas (⌘.)'}
+      class="tool-btn fs-btn"
+      class:active-fs={isFullscreen}
+      title={isFullscreen ? 'Exit Fullscreen (⌘⇧F)' : 'Fullscreen Window (⌘⇧F)'}
       type="button"
       onclick={(e) => {
         e.stopPropagation();
-        send({ type: 'toggleZenMode' });
+        send({ type: 'toggleFullscreen' });
       }}
-      aria-label="Zen Mode"
+      aria-label="Toggle Fullscreen"
     >
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
-        <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      {#if isFullscreen}
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+          <path d="M5.5 2.5v3h-3M10.5 2.5v3h3M5.5 13.5v-3h-3M10.5 13.5v-3h3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      {:else}
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+          <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      {/if}
     </button>
 
     <!-- Adblock & Privacy Shield Button -->
@@ -403,6 +412,20 @@
       variant="docked"
       onAccept={onAcceptSuggestion}
     />
+  {/if}
+
+  <!-- Backdrop to close expanded omnibar when clicking outside -->
+  {#if focused}
+    <div
+      class="omnibar-backdrop"
+      role="presentation"
+      tabindex="-1"
+      onclick={() => {
+        focused = false;
+        send({ type: 'setOmnibarOpen', open: false });
+        send({ type: 'focusPage' });
+      }}
+    ></div>
   {/if}
 </div>
 
@@ -593,9 +616,30 @@
     background: rgba(56, 189, 248, 0.16);
   }
 
-  .zen-btn.active-zen {
+  .fs-btn.active-fs {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  .omnibar-backdrop {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: transparent;
+  }
+
+  .bar-container.fullscreen {
+    height: 100%;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bar-container.fullscreen .bar {
+    height: 38px;
   }
 
   .shield-btn:hover {

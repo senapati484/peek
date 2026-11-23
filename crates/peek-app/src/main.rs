@@ -251,7 +251,20 @@ pub fn setup_macos_menu() {
         edit_menu_item.setSubmenu(Some(&edit_menu));
         main_menu.addItem(&edit_menu_item);
 
-        // 3. Window menu (Enables ⌘M)
+        // 3. View menu (Enables native Full Screen toggle)
+        let view_menu_item = NSMenuItem::new(mtm);
+        let view_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), ns_string!("View"));
+        let fs_item = add_item(
+            &view_menu,
+            ns_string!("Toggle Full Screen"),
+            Some(sel!(toggleFullScreen:)),
+            ns_string!("f"),
+        );
+        let () = msg_send![&*fs_item, setKeyEquivalentModifierMask: (1usize << 20) | (1usize << 18)]; // Command + Control
+        view_menu_item.setSubmenu(Some(&view_menu));
+        main_menu.addItem(&view_menu_item);
+
+        // 4. Window menu (Enables ⌘M)
         let window_menu_item = NSMenuItem::new(mtm);
         let window_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), ns_string!("Window"));
 

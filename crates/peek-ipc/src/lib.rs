@@ -202,6 +202,8 @@ pub enum Command {
     ToggleBookmark { url: String, title: String },
     /// Toggle Zen / Ghost Canvas mode.
     ToggleZenMode,
+    /// Toggle window fullscreen mode.
+    ToggleFullscreen,
     /// Toggle Smart Inverted Dark Mode on current tab.
     ToggleInvertDark,
     /// Toggle Picture-in-Picture on active video.
@@ -321,6 +323,9 @@ pub enum Event {
         active: bool,
     },
     ZenModeState {
+        active: bool,
+    },
+    FullscreenState {
         active: bool,
     },
     InvertDarkState {
@@ -516,6 +521,7 @@ pub enum Shortcut {
     ToggleReaderMode,
     ToggleMute,
     ToggleZenMode,
+    ToggleFullscreen,
     ToggleInvertDark,
     TogglePiP,
     ZoomIn,
