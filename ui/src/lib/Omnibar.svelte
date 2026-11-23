@@ -31,6 +31,7 @@
   let activeProfile = $state('default');
   let profileInitial = $derived((activeProfile[0] || 'D').toUpperCase());
   let drawerOpen = $state(false);
+  let drawerSide = $state<EdgeSide | null>(null);
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
 
@@ -531,6 +532,7 @@
         break;
       case 'drawerState':
         drawerOpen = event.open;
+        drawerSide = event.open ? (event.side ?? null) : null;
         if (event.open) closeBar(false);
         break;
       case 'settings':
@@ -915,8 +917,8 @@
   {#if isStartPage}
     <!-- Center Start Page Layout: Pure Minimalist Search & Pinned Speed Dial -->
     <div class="start-center">
-      {#if !drawerOpen}
-        <!-- Left Corner: Quick Tabs Affordance -->
+      <!-- Left Corner: Quick Tabs Affordance (visible unless left drawer is open) -->
+      {#if !drawerOpen || drawerSide !== 'left'}
         <div class="start-corner left">
           <button
             class="start-corner-pill"
@@ -935,8 +937,10 @@
             <kbd class="corner-kbd">⌘⇧[</kbd>
           </button>
         </div>
+      {/if}
 
-        <!-- Right Corner: Quick Settings & Profile Affordances -->
+      <!-- Right Corner: Quick Settings & Profile Affordances (visible unless right drawer is open) -->
+      {#if !drawerOpen || drawerSide !== 'right'}
         <div class="start-corner right">
           <button
             class="start-corner-pill"
@@ -968,8 +972,10 @@
             <span class="profile-chip-name">{activeProfile}</span>
           </button>
         </div>
+      {/if}
 
-        <!-- Left & Right Edge Touchpoint Indicators -->
+      <!-- Left & Right Edge Touchpoint Indicators -->
+      {#if !drawerOpen || drawerSide !== 'left'}
         <button
           class="edge-hover-indicator left"
           title="Hover or click left edge to view Tabs (⌘⇧[)"
@@ -985,7 +991,9 @@
         >
           <span class="edge-indicator-bar"></span>
         </button>
+      {/if}
 
+      {#if !drawerOpen || drawerSide !== 'right'}
         <button
           class="edge-hover-indicator right"
           title="Hover or click right edge to view Settings (⌘⇧])"

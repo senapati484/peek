@@ -1650,7 +1650,7 @@ impl App {
     fn drawer_bounds_for_side(&self, side: EdgeSide) -> Bounds {
         let (w, h) = self.window_size;
         let width = match side {
-            EdgeSide::Left => 290.0f64,
+            EdgeSide::Left => 320.0f64,
             EdgeSide::Right => 360.0f64,
         }
         .min(w);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
   import {
     displayUrl,
     isBlank,
@@ -12,31 +12,56 @@
     type HistoryItem,
     type PeekEvent,
     type TabInfo,
-  } from './ipc';
+  } from "./ipc";
 
-  type Section = 'tabs' | 'spaces' | 'history' | 'bookmarks' | 'notes' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
+  type Section =
+    | "tabs"
+    | "spaces"
+    | "history"
+    | "bookmarks"
+    | "notes"
+    | "general"
+    | "appearance"
+    | "blocking"
+    | "preview"
+    | "profiles"
+    | "extensions"
+    | "shortcuts"
+    | "about";
 
   function getInitialParams() {
-    const rawHash = window.location.hash.replace('#', '');
-    const queryPart = rawHash.includes('?') ? rawHash.split('?')[1] : '';
+    const rawHash = window.location.hash.replace("#", "");
+    const queryPart = rawHash.includes("?") ? rawHash.split("?")[1] : "";
     const params = new URLSearchParams(queryPart);
-    const sideParam = params.get('side')?.toLowerCase();
-    const sectionParam = params.get('section')?.toLowerCase();
+    const sideParam = params.get("side")?.toLowerCase();
+    const sectionParam = params.get("section")?.toLowerCase();
     const validSections: Section[] = [
-      'tabs', 'spaces', 'history', 'bookmarks', 'notes', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
+      "tabs",
+      "spaces",
+      "history",
+      "bookmarks",
+      "notes",
+      "general",
+      "appearance",
+      "blocking",
+      "preview",
+      "profiles",
+      "extensions",
+      "shortcuts",
+      "about",
     ];
 
-    let resolvedSection: Section = sideParam === 'right' ? 'general' : 'tabs';
+    let resolvedSection: Section = sideParam === "right" ? "general" : "tabs";
     if (sectionParam) {
-      if (sectionParam === 'settings') {
-        resolvedSection = 'general';
+      if (sectionParam === "settings") {
+        resolvedSection = "general";
       } else if (validSections.includes(sectionParam as Section)) {
         resolvedSection = sectionParam as Section;
       }
     }
 
     return {
-      side: (sideParam === 'right' ? 'right' : 'left') as EdgeSide,
+      side: (sideParam === "right" ? "right" : "left") as EdgeSide,
       section: resolvedSection,
     };
   }
@@ -44,7 +69,7 @@
   const initialParams = getInitialParams();
   let currentSide = $state<EdgeSide>(initialParams.side);
   let section = $state<Section>(initialParams.section);
-  let filterText = $state('');
+  let filterText = $state("");
   let animKey = $state(0);
 
   let tabs = $state<TabInfo[]>([]);
@@ -62,23 +87,25 @@
   let previewHeight = $state(320);
   let previewZoom = $state(0.75);
   let previewModifierOnly = $state(true);
-  let configuredDrawerSide = $state<EdgeSide>('right');
+  let configuredDrawerSide = $state<EdgeSide>("right");
   let edgeZone = $state(4);
   let startBlank = $state(false);
-  let searchEngine = $state('Google');
+  let searchEngine = $state("Google");
 
   // Profiles
-  let profiles = $state<string[]>(['default']);
-  let activeProfile = $state('default');
-  let newProfileName = $state('');
+  let profiles = $state<string[]>(["default"]);
+  let activeProfile = $state("default");
+  let newProfileName = $state("");
 
   // Extensions
   let extensions = $state<ExtensionSummary[]>([]);
-  let extensionInstallPath = $state('');
+  let extensionInstallPath = $state("");
 
   // Appearance & Theme
-  let themeMode = $state<'system' | 'dark' | 'light'>('system');
-  let accentColor = $state<'blue' | 'purple' | 'emerald' | 'amber' | 'rose'>('blue');
+  let themeMode = $state<"system" | "dark" | "light">("system");
+  let accentColor = $state<"blue" | "purple" | "emerald" | "amber" | "rose">(
+    "blue",
+  );
 
   // Drag and close timer
   let dragId = $state<number | null>(null);
@@ -89,56 +116,86 @@
   let estimatedMemorySaved = $derived(sleepingCount * 95);
 
   function hibernateOthers(): void {
-    send({ type: 'discardOtherTabs' });
+    send({ type: "discardOtherTabs" });
   }
 
   function hibernateTab(id: number): void {
-    send({ type: 'discardTab', id });
+    send({ type: "discardTab", id });
   }
 
   // Spaces State
-  type SpaceId = 'personal' | 'work' | 'dev' | 'research';
-  type SpaceInfo = { id: SpaceId; name: string; icon: string; color: string; desc: string };
+  type SpaceId = "personal" | "work" | "dev" | "research";
+  type SpaceInfo = {
+    id: SpaceId;
+    name: string;
+    icon: string;
+    color: string;
+    desc: string;
+  };
 
   const SPACES: SpaceInfo[] = [
-    { id: 'personal', name: 'Personal', icon: '👤', color: '#3b82f6', desc: 'Daily browsing & leisure' },
-    { id: 'work', name: 'Work', icon: '💼', color: '#a855f7', desc: 'Projects & company portals' },
-    { id: 'dev', name: 'Dev', icon: '⚡', color: '#10b981', desc: 'GitHub, docs & localhost' },
-    { id: 'research', name: 'Research', icon: '🔬', color: '#f59e0b', desc: 'Papers, articles & notes' },
+    {
+      id: "personal",
+      name: "Personal",
+      icon: "👤",
+      color: "#3b82f6",
+      desc: "Daily browsing & leisure",
+    },
+    {
+      id: "work",
+      name: "Work",
+      icon: "💼",
+      color: "#a855f7",
+      desc: "Projects & company portals",
+    },
+    {
+      id: "dev",
+      name: "Dev",
+      icon: "⚡",
+      color: "#10b981",
+      desc: "GitHub, docs & localhost",
+    },
+    {
+      id: "research",
+      name: "Research",
+      icon: "🔬",
+      color: "#f59e0b",
+      desc: "Papers, articles & notes",
+    },
   ];
 
-  let activeSpace = $state<'all' | SpaceId>('all');
+  let activeSpace = $state<"all" | SpaceId>("all");
   let tabSpaceMap = $state<Record<number, SpaceId>>({});
 
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== "undefined") {
     try {
-      const raw = localStorage.getItem('peek_tab_spaces');
+      const raw = localStorage.getItem("peek_tab_spaces");
       if (raw) tabSpaceMap = JSON.parse(raw);
-      const savedSpace = localStorage.getItem('peek_active_space');
-      if (savedSpace) activeSpace = savedSpace as 'all' | SpaceId;
+      const savedSpace = localStorage.getItem("peek_active_space");
+      if (savedSpace) activeSpace = savedSpace as "all" | SpaceId;
     } catch {}
   }
 
-  function setSpace(space: 'all' | SpaceId) {
+  function setSpace(space: "all" | SpaceId) {
     activeSpace = space;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('peek_active_space', space);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("peek_active_space", space);
     }
   }
 
   function cycleTabSpace(tabId: number) {
-    const spaceOrder: SpaceId[] = ['personal', 'work', 'dev', 'research'];
-    const current = tabSpaceMap[tabId] || 'personal';
+    const spaceOrder: SpaceId[] = ["personal", "work", "dev", "research"];
+    const current = tabSpaceMap[tabId] || "personal";
     const nextIdx = (spaceOrder.indexOf(current) + 1) % spaceOrder.length;
     const nextSpace = spaceOrder[nextIdx];
     tabSpaceMap = { ...tabSpaceMap, [tabId]: nextSpace };
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('peek_tab_spaces', JSON.stringify(tabSpaceMap));
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("peek_tab_spaces", JSON.stringify(tabSpaceMap));
     }
   }
 
   // Research Scratchpad Notes State
-  let noteContent = $state('');
+  let noteContent = $state("");
   let copiedNotes = $state(false);
   let noteSaveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -147,7 +204,7 @@
     noteContent = val;
     if (noteSaveTimer) clearTimeout(noteSaveTimer);
     noteSaveTimer = setTimeout(() => {
-      send({ type: 'saveNote', content: noteContent });
+      send({ type: "saveNote", content: noteContent });
     }, 400);
   }
 
@@ -156,40 +213,44 @@
     const title = activeTab.title || activeTab.url;
     const mdLink = `\n- [${title}](${activeTab.url})\n`;
     noteContent += mdLink;
-    send({ type: 'saveNote', content: noteContent });
+    send({ type: "saveNote", content: noteContent });
   }
 
   function copyNotes() {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(noteContent);
       copiedNotes = true;
-      setTimeout(() => { copiedNotes = false; }, 1800);
+      setTimeout(() => {
+        copiedNotes = false;
+      }, 1800);
     }
   }
 
   let noteWords = $derived(
-    noteContent.trim() ? noteContent.trim().split(/\s+/).filter(Boolean).length : 0
+    noteContent.trim()
+      ? noteContent.trim().split(/\s+/).filter(Boolean).length
+      : 0,
   );
 
   let visibleTabs = $derived(
-    activeSpace === 'all'
+    activeSpace === "all"
       ? tabs
-      : tabs.filter((t) => (tabSpaceMap[t.id] || 'personal') === activeSpace)
+      : tabs.filter((t) => (tabSpaceMap[t.id] || "personal") === activeSpace),
   );
 
   let filteredTabs = $derived(
     filterText.trim()
       ? visibleTabs.filter((t) =>
-          (t.title || t.url).toLowerCase().includes(filterText.toLowerCase())
+          (t.title || t.url).toLowerCase().includes(filterText.toLowerCase()),
         )
-      : visibleTabs
+      : visibleTabs,
   );
 
   let keyboardSelectedIndex = $state(-1);
   let keyboardSelectedTabId = $derived(
     keyboardSelectedIndex >= 0 && keyboardSelectedIndex < filteredTabs.length
       ? filteredTabs[keyboardSelectedIndex].id
-      : null
+      : null,
   );
 
   $effect(() => {
@@ -201,8 +262,8 @@
   $effect(() => {
     if (keyboardSelectedIndex >= 0) {
       setTimeout(() => {
-        const el = document.querySelector('.tabs-list li.keyboard-selected');
-        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const el = document.querySelector(".tabs-list li.keyboard-selected");
+        el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }, 0);
     }
   });
@@ -217,37 +278,40 @@
   let filteredHistory = $derived(
     filterText.trim()
       ? historyEntries.filter((h) =>
-          (h.title || h.url).toLowerCase().includes(filterText.toLowerCase())
+          (h.title || h.url).toLowerCase().includes(filterText.toLowerCase()),
         )
-      : historyEntries
+      : historyEntries,
   );
 
   let filteredBookmarks = $derived(
     filterText.trim()
       ? bookmarksList.filter((b) =>
-          (b.title || b.url).toLowerCase().includes(filterText.toLowerCase())
+          (b.title || b.url).toLowerCase().includes(filterText.toLowerCase()),
         )
-      : bookmarksList
+      : bookmarksList,
   );
 
   function formatRelativeTime(ts: number): string {
-    if (!ts) return '';
+    if (!ts) return "";
     const ms = ts > 10000000000 ? ts : ts * 1000;
     const diff = Date.now() - ms;
-    if (diff < 60000) return 'Just now';
+    if (diff < 60000) return "Just now";
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     const days = Math.floor(diff / 86400000);
-    if (days === 1) return 'Yesterday';
+    if (days === 1) return "Yesterday";
     if (days < 7) return `${days}d ago`;
-    return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return new Date(ms).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
   }
 
   function cleanDomain(url: string): string {
     try {
-      return new URL(url).hostname.replace(/^www\./, '');
+      return new URL(url).hostname.replace(/^www\./, "");
     } catch {
-      return url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+      return url.replace(/^https?:\/\//, "").replace(/^www\./, "");
     }
   }
 
@@ -255,20 +319,20 @@
   let isCurrentTabBookmarked = $derived(
     activeTab && !isBlank(activeTab.url)
       ? bookmarksList.some((b) => b.url === activeTab?.url)
-      : false
+      : false,
   );
 
   function toggleCurrentBookmark(): void {
     if (!activeTab || isBlank(activeTab.url)) return;
     send({
-      type: 'toggleBookmark',
+      type: "toggleBookmark",
       url: activeTab.url,
       title: activeTab.title || displayUrl(activeTab.url),
     });
   }
 
   function close(): void {
-    send({ type: 'setDrawer', open: false });
+    send({ type: "setDrawer", open: false });
   }
 
   function scheduleClose(): void {
@@ -284,91 +348,93 @@
   }
 
   function switchTo(id: number): void {
-    send({ type: 'switchTab', id });
+    send({ type: "switchTab", id });
     close();
   }
 
   function setting(key: string, value: unknown): void {
-    send({ type: 'setSetting', key, value });
+    send({ type: "setSetting", key, value });
   }
 
   function domainInitial(url: string): string {
-    if (!url || url === 'about:blank') return '✦';
+    if (!url || url === "about:blank") return "✦";
     try {
       const u = new URL(url);
-      const h = u.hostname.replace(/^www\./, '');
-      return (h[0] || '✦').toUpperCase();
+      const h = u.hostname.replace(/^www\./, "");
+      return (h[0] || "✦").toUpperCase();
     } catch {
-      return '✦';
+      return "✦";
     }
   }
 
-  function applyTheme(mode: 'system' | 'dark' | 'light') {
+  function applyTheme(mode: "system" | "dark" | "light") {
     themeMode = mode;
-    localStorage.setItem('peek_theme', mode);
-    if (mode === 'system') {
+    localStorage.setItem("peek_theme", mode);
+    if (mode === "system") {
       delete document.documentElement.dataset.theme;
     } else {
       document.documentElement.dataset.theme = mode;
     }
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event("storage"));
   }
 
-  function applyAccent(accent: 'blue' | 'purple' | 'emerald' | 'amber' | 'rose') {
+  function applyAccent(
+    accent: "blue" | "purple" | "emerald" | "amber" | "rose",
+  ) {
     accentColor = accent;
-    localStorage.setItem('peek_accent', accent);
+    localStorage.setItem("peek_accent", accent);
     document.documentElement.dataset.accent = accent;
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event("storage"));
   }
 
   function handleCreateProfile() {
     const trimmed = newProfileName.trim();
     if (!trimmed) return;
-    send({ type: 'createProfile', name: trimmed });
-    newProfileName = '';
+    send({ type: "createProfile", name: trimmed });
+    newProfileName = "";
   }
 
   function handleSwitchProfile(name: string) {
     if (name === activeProfile) return;
-    send({ type: 'switchProfile', name });
+    send({ type: "switchProfile", name });
   }
 
   function handleDeleteProfile(name: string) {
-    if (name === 'default' || name === activeProfile) return;
+    if (name === "default" || name === activeProfile) return;
     if (confirm(`Delete profile "${name}" and all its data?`)) {
-      send({ type: 'deleteProfile', name });
+      send({ type: "deleteProfile", name });
     }
   }
 
   function handleInstallExtension() {
     const path = extensionInstallPath.trim();
     if (!path) return;
-    send({ type: 'installExtension', path });
-    extensionInstallPath = '';
+    send({ type: "installExtension", path });
+    extensionInstallPath = "";
   }
 
   function handleToggleExtension(id: string, current: boolean) {
-    send({ type: 'toggleExtension', id, enabled: !current });
+    send({ type: "toggleExtension", id, enabled: !current });
   }
 
   function handleUninstallExtension(id: string) {
-    if (confirm('Uninstall this extension?')) {
-      send({ type: 'uninstallExtension', id });
+    if (confirm("Uninstall this extension?")) {
+      send({ type: "uninstallExtension", id });
     }
   }
 
   function handleEvent(event: PeekEvent): void {
     switch (event.type) {
-      case 'tabsChanged':
+      case "tabsChanged":
         tabs = event.tabs;
         activeTabId = event.tabs.find((t) => t.active)?.id ?? null;
         break;
-      case 'adblockCount':
+      case "adblockCount":
         blocked = event.blocked;
         allowedOnSite = event.allowedOnSite;
         host = event.host;
         break;
-      case 'settings':
+      case "settings":
         maxLive = event.maxLive;
         idleMinutes = event.idleDiscardMinutes;
         hoverDelay = event.hoverDelayMs;
@@ -377,57 +443,69 @@
         startBlank = event.startBlank;
         searchEngine = event.searchEngine;
         break;
-      case 'drawerState':
+      case "drawerState":
         if (!event.open) {
           // rust closed
         } else {
           animKey += 1;
           if (event.side) {
             currentSide = event.side;
-            if (event.side === 'left') {
-              if (section !== 'tabs' && section !== 'spaces' && section !== 'history' && section !== 'bookmarks' && section !== 'notes') {
-                section = 'tabs';
+            if (event.side === "left") {
+              if (
+                section !== "tabs" &&
+                section !== "spaces" &&
+                section !== "history" &&
+                section !== "bookmarks" &&
+                section !== "notes"
+              ) {
+                section = "tabs";
               }
-            } else if (section === 'tabs' || section === 'spaces' || section === 'history' || section === 'bookmarks' || section === 'notes') {
-              section = 'general';
+            } else if (
+              section === "tabs" ||
+              section === "spaces" ||
+              section === "history" ||
+              section === "bookmarks" ||
+              section === "notes"
+            ) {
+              section = "general";
             }
           }
           if (event.section) {
-            if (event.section === 'settings') {
-              section = 'general';
+            if (event.section === "settings") {
+              section = "general";
             } else {
               section = event.section as Section;
-              if (section === 'history') {
-                currentSide = 'left';
-                send({ type: 'getHistory' });
-              } else if (section === 'bookmarks') {
-                currentSide = 'left';
-                send({ type: 'getBookmarks' });
-              } else if (section === 'notes') {
-                currentSide = 'left';
-                send({ type: 'getNote' });
+              if (section === "history") {
+                currentSide = "left";
+                send({ type: "getHistory" });
+              } else if (section === "bookmarks") {
+                currentSide = "left";
+                send({ type: "getBookmarks" });
+              } else if (section === "notes") {
+                currentSide = "left";
+                send({ type: "getNote" });
               }
             }
           }
         }
         break;
-      case 'noteLoaded':
+      case "noteLoaded":
         noteContent = event.content;
         break;
-      case 'historyList':
+      case "historyList":
         historyEntries = event.entries;
         break;
-      case 'bookmarksList':
+      case "bookmarksList":
         bookmarksList = event.bookmarks;
         break;
-      case 'cookiesCount':
+      case "cookiesCount":
         cookiesCount = event.count;
         break;
-      case 'profilesList':
+      case "profilesList":
         profiles = event.profiles;
         activeProfile = event.active;
         break;
-      case 'extensionsList':
+      case "extensionsList":
         extensions = event.extensions;
         break;
       default:
@@ -437,53 +515,66 @@
 
   function onDragStart(event: DragEvent, id: number): void {
     dragId = id;
-    event.dataTransfer?.setData('text/plain', String(id));
+    event.dataTransfer?.setData("text/plain", String(id));
   }
 
   function onDrop(event: DragEvent, index: number): void {
     event.preventDefault();
     if (dragId != null) {
-      send({ type: 'reorderTab', id: dragId, toIndex: index });
+      send({ type: "reorderTab", id: dragId, toIndex: index });
       dragId = null;
     }
   }
 
   onMount(() => {
-    const savedTheme = localStorage.getItem('peek_theme') as 'system' | 'dark' | 'light' | null;
+    const savedTheme = localStorage.getItem("peek_theme") as
+      | "system"
+      | "dark"
+      | "light"
+      | null;
     if (savedTheme) applyTheme(savedTheme);
-    const savedAccent = localStorage.getItem('peek_accent') as 'blue' | 'purple' | 'emerald' | 'amber' | 'rose' | null;
+    const savedAccent = localStorage.getItem("peek_accent") as
+      | "blue"
+      | "purple"
+      | "emerald"
+      | "amber"
+      | "rose"
+      | null;
     if (savedAccent) applyAccent(savedAccent);
 
     onEvent(handleEvent);
     requestState();
-    send({ type: 'getHistory' });
-    send({ type: 'getBookmarks' });
+    send({ type: "getHistory" });
+    send({ type: "getBookmarks" });
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         if (filterText) {
-          filterText = '';
+          filterText = "";
         } else {
           close();
         }
         return;
       }
-      if (currentSide === 'left') {
-        if (event.key === 'ArrowDown') {
+      if (currentSide === "left") {
+        if (event.key === "ArrowDown") {
           event.preventDefault();
           if (filteredTabs.length > 0) {
-            keyboardSelectedIndex = (keyboardSelectedIndex + 1) % filteredTabs.length;
+            keyboardSelectedIndex =
+              (keyboardSelectedIndex + 1) % filteredTabs.length;
           }
           return;
         }
-        if (event.key === 'ArrowUp') {
+        if (event.key === "ArrowUp") {
           event.preventDefault();
           if (filteredTabs.length > 0) {
-            keyboardSelectedIndex = (keyboardSelectedIndex - 1 + filteredTabs.length) % filteredTabs.length;
+            keyboardSelectedIndex =
+              (keyboardSelectedIndex - 1 + filteredTabs.length) %
+              filteredTabs.length;
           }
           return;
         }
-        if (event.key === 'Enter' && keyboardSelectedTabId != null) {
+        if (event.key === "Enter" && keyboardSelectedTabId != null) {
           event.preventDefault();
           switchTo(keyboardSelectedTabId);
           return;
@@ -492,54 +583,54 @@
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       if (mod && !event.shiftKey && !event.altKey) {
-        if (key === 't') {
+        if (key === "t") {
           event.preventDefault();
-          send({ type: 'newTab' });
+          send({ type: "newTab" });
           close();
           return;
         }
-        if (key === 'w') {
+        if (key === "w") {
           event.preventDefault();
           const targetId = keyboardSelectedTabId ?? activeTabId;
           if (targetId != null) {
-            send({ type: 'closeTab', id: targetId });
+            send({ type: "closeTab", id: targetId });
           }
           return;
         }
       }
       if (mod && event.shiftKey && !event.altKey) {
-        if (key === '[' || key === '{') {
+        if (key === "[" || key === "{") {
           event.preventDefault();
-          if (currentSide === 'left') {
+          if (currentSide === "left") {
             close();
           } else {
-            currentSide = 'left';
-            section = 'tabs';
+            currentSide = "left";
+            section = "tabs";
           }
           return;
         }
-        if (key === ']' || key === '}') {
+        if (key === "]" || key === "}") {
           event.preventDefault();
-          if (currentSide === 'right') {
+          if (currentSide === "right") {
             close();
           } else {
-            currentSide = 'right';
-            section = 'general';
+            currentSide = "right";
+            section = "general";
           }
           return;
         }
       }
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   });
 </script>
 
 {#key animKey}
   <aside
     class="drawer"
-    class:left={currentSide === 'left'}
-    class:right={currentSide === 'right'}
+    class:left={currentSide === "left"}
+    class:right={currentSide === "right"}
     onmouseenter={cancelClose}
     onmouseleave={scheduleClose}
     aria-label="Peek drawer"
@@ -547,642 +638,10 @@
   {#if currentSide === 'left'}
     <!-- Left Drawer: Dedicated Vertical Tabs, History, and Bookmarks -->
     <header class="tabs-header">
-      <div class="tabs-brand">
-        <img src="/logo.png" alt="Peek" class="drawer-logo" />
-        <nav class="left-nav-pills" aria-label="Views">
-          <button
-            class="left-pill"
-            class:active={section === 'tabs'}
-            onclick={() => { section = 'tabs'; filterText = ''; }}
-            type="button"
-          >
-            Tabs <span class="tab-count-badge">{filteredTabs.length}</span>
-          </button>
-          <button
-            class="left-pill"
-            class:active={section === 'spaces'}
-            onclick={() => { section = 'spaces'; filterText = ''; }}
-            type="button"
-          >
-            Spaces
-          </button>
-          <button
-            class="left-pill"
-            class:active={section === 'history'}
-            onclick={() => { section = 'history'; filterText = ''; send({ type: 'getHistory' }); }}
-            type="button"
-          >
-            History
-          </button>
-          <button
-            class="left-pill"
-            class:active={section === 'bookmarks'}
-            onclick={() => { section = 'bookmarks'; filterText = ''; send({ type: 'getBookmarks' }); }}
-            type="button"
-          >
-            Saved
-          </button>
-          <button
-            class="left-pill"
-            class:active={section === 'notes'}
-            onclick={() => { section = 'notes'; filterText = ''; send({ type: 'getNote' }); }}
-            type="button"
-          >
-            Notes
-          </button>
-        </nav>
-      </div>
-      <button class="icon-close-btn" onclick={close} title="Close drawer (Esc)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="close-icon">
-          <path d="M4 4l8 8M12 4l-8 8" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-      </button>
-    </header>
-
-    {#if section === 'tabs'}
-
-    <!-- Spaces Switcher Strip -->
-    <div class="spaces-filter-strip">
-      <button
-        class="space-filter-pill"
-        class:active={activeSpace === 'all'}
-        onclick={() => setSpace('all')}
-        type="button"
-      >
-        All
-      </button>
-      {#each SPACES as sp}
-        {@const spCount = tabs.filter(t => (tabSpaceMap[t.id] || 'personal') === sp.id).length}
-        <button
-          class="space-filter-pill"
-          class:active={activeSpace === sp.id}
-          style="--sp-color: {sp.color}"
-          onclick={() => setSpace(sp.id)}
-          type="button"
-        >
-          <span class="sp-dot" style="background: {sp.color}"></span>
-          {sp.name} <span class="sp-badge">{spCount}</span>
-        </button>
-      {/each}
-    </div>
-
-    <div class="filter-wrap">
-      <div class="filter-box">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
-          <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
-          <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Filter tabs..."
-          bind:value={filterText}
-          class="filter-input"
-        />
-        {#if filterText}
-          <button class="clear-filter" onclick={() => filterText = ''}>×</button>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Memory Saver Dashboard -->
-    <div class="memory-saver-bar">
-      <div class="mem-stat-info">
-        <span class="mem-icon" aria-hidden="true">☾</span>
-        <span class="mem-text">
-          <strong>{liveCount}</strong> live · <strong>{sleepingCount}</strong> sleeping
-          {#if sleepingCount > 0}
-            <span class="mem-saved">({estimatedMemorySaved}MB saved)</span>
-          {/if}
-        </span>
-      </div>
-      {#if liveCount > 1}
-        <button
-          class="hibernate-btn"
-          title="Hibernate all inactive background tabs to save memory"
-          onclick={hibernateOthers}
-          type="button"
-        >
-          Hibernate Others
-        </button>
-      {/if}
-    </div>
-
-    <div class="body tabs-body">
-      {#if pinnedTabs.length > 0}
-        <div class="tabs-subgroup-header">
-          <span class="subgroup-title">PINNED TABS</span>
-          <span class="subgroup-count">{pinnedTabs.length}</span>
-        </div>
-        <ul class="tabs-list pinned-tabs-list">
-          {#each pinnedTabs as tab (tab.id)}
-            <li
-              class:active={tab.id === activeTabId}
-              class:discarded={tab.discarded}
-              class:keyboard-selected={tab.id === keyboardSelectedTabId}
-              class="is-pinned-tab"
-            >
-              <button
-                class="tab-row"
-                onclick={() => switchTo(tab.id)}
-                title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
-              >
-                {#if tab.favicon}
-                  <img
-                    src={tab.favicon}
-                    alt=""
-                    class="favicon"
-                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                {:else}
-                  <span class="favicon-initial">{domainInitial(tab.url)}</span>
-                {/if}
-                <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
-                {#if tab.audible}
-                  <span class="pill audio" title="Playing audio">
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
-                      <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
-                    </svg>
-                    Audio
-                  </span>
-                {/if}
-              </button>
-              {#if tab.audible}
-                <button
-                  class="tab-audio-btn"
-                  title="Mute / Unmute tab audio"
-                  type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    send({ type: 'toggleMuteTab', id: tab.id });
-                  }}
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="tab-audio-icon">
-                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
-                  </svg>
-                </button>
-              {/if}
-              <button
-                class="tab-space-tag"
-                title={`Space: ${SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.name} (Click to switch space)`}
-                type="button"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  cycleTabSpace(tab.id);
-                }}
-              >
-                <span class="space-indicator-dot" style="background: {SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.color}"></span>
-              </button>
-              <button
-                class="tab-pin-btn is-pinned"
-                title="Unpin tab"
-                type="button"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  send({ type: 'pinTab', id: tab.id, pinned: false });
-                }}
-              >
-                <svg viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" class="tab-pin-icon">
-                  <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-              <button
-                class="tab-close"
-                title="Close tab (Cmd+W)"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  send({ type: 'closeTab', id: tab.id });
-                }}
-              >
-                ×
-              </button>
-            </li>
-          {/each}
-        </ul>
-        {#if regularTabs.length > 0}
-          <div class="tabs-subgroup-header" style="margin-top: 10px;">
-            <span class="subgroup-title">ALL TABS</span>
-            <span class="subgroup-count">{regularTabs.length}</span>
-          </div>
-        {/if}
-      {/if}
-
-      {#if regularTabs.length > 0}
-        <ul class="tabs-list">
-          {#each regularTabs as tab, idx (tab.id)}
-            <li
-              class:active={tab.id === activeTabId}
-              class:discarded={tab.discarded}
-              class:keyboard-selected={tab.id === keyboardSelectedTabId}
-              draggable="true"
-              ondragstart={(e) => onDragStart(e, tab.id)}
-              ondragover={(e) => e.preventDefault()}
-              ondrop={(e) => onDrop(e, idx)}
-            >
-              <button
-                class="tab-row"
-                onclick={() => switchTo(tab.id)}
-                title={`${tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url)}\n${tab.url}`}
-              >
-                {#if tab.favicon}
-                  <img
-                    src={tab.favicon}
-                    alt=""
-                    class="favicon"
-                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                {:else}
-                  <span class="favicon-initial">{domainInitial(tab.url)}</span>
-                {/if}
-                <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
-                {#if tab.audible}
-                  <span class="pill audio" title="Playing audio">
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
-                      <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
-                    </svg>
-                    Audio
-                  </span>
-                {/if}
-                {#if tab.discarded}
-                  <span class="pill sleep" title="Tab sleeping to save memory. Click to wake.">
-                    ☾ Sleeping
-                  </span>
-                {/if}
-              </button>
-              {#if tab.audible}
-                <button
-                  class="tab-audio-btn"
-                  title="Mute / Unmute tab audio"
-                  type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    send({ type: 'toggleMuteTab', id: tab.id });
-                  }}
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="tab-audio-icon">
-                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
-                  </svg>
-                </button>
-              {/if}
-              <button
-                class="tab-space-tag"
-                title={`Space: ${SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.name} (Click to switch space)`}
-                type="button"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  cycleTabSpace(tab.id);
-                }}
-              >
-                <span class="space-indicator-dot" style="background: {SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.color}"></span>
-              </button>
-              <button
-                class="tab-pin-btn"
-                title="Pin tab"
-                type="button"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  send({ type: 'pinTab', id: tab.id, pinned: true });
-                }}
-              >
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tab-pin-icon">
-                  <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-              {#if !tab.discarded && tab.id !== activeTabId}
-                <button
-                  class="tab-sleep-btn"
-                  title="Hibernate tab to free memory"
-                  type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    hibernateTab(tab.id);
-                  }}
-                >
-                  ☾
-                </button>
-              {/if}
-              <button
-                class="tab-close"
-                title="Close tab (Cmd+W)"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  send({ type: 'closeTab', id: tab.id });
-                }}
-              >
-                ×
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-
-      {#if filteredTabs.length === 0}
-        <div class="empty-state">
-          <span class="empty-icon">🔍</span>
-          <span class="empty-text">No tabs match "{filterText}"</span>
-          <button class="clear-filter-btn" type="button" onclick={() => filterText = ''}>
-            Clear filter (Esc)
-          </button>
-        </div>
-      {/if}
-    </div>
-
-    <footer class="tabs-footer">
-      <button class="new-tab-btn" onclick={() => { send({ type: 'newTab' }); close(); }}>
-        <span class="plus">+</span> New Tab <kbd>⌘ T</kbd>
-      </button>
-    </footer>
-
-    {:else if section === 'history'}
-      <div class="filter-wrap">
-        <div class="filter-box">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
-            <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
-            <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search browsing history..."
-            bind:value={filterText}
-            class="filter-input"
-          />
-          {#if filterText}
-            <button class="clear-filter" onclick={() => filterText = ''}>×</button>
-          {/if}
-        </div>
-      </div>
-
-      <div class="body history-body">
-        {#if filteredHistory.length === 0}
-          <div class="empty-state">
-            <span class="empty-icon">📜</span>
-            <span class="empty-text">
-              {filterText ? `No history matching "${filterText}"` : 'No browsing history yet'}
-            </span>
-          </div>
-        {:else}
-          <ul class="history-list">
-            {#each filteredHistory as item (item.url + ':' + item.lastVisit)}
-              <li class="history-item">
-                <button
-                  class="history-row"
-                  type="button"
-                  onclick={() => { send({ type: 'navigate', input: item.url }); close(); }}
-                  title={`${item.title || item.url}\n${item.url}`}
-                >
-                  <span class="favicon-initial">{domainInitial(item.url)}</span>
-                  <div class="history-info">
-                    <span class="history-title">{item.title || displayUrl(item.url)}</span>
-                    <div class="history-sub">
-                      <span class="history-host">{cleanDomain(item.url)}</span>
-                      {#if item.lastVisit}
-                        <span class="history-dot">·</span>
-                        <span class="history-time">{formatRelativeTime(item.lastVisit)}</span>
-                      {/if}
-                    </div>
-                  </div>
-                </button>
-                <button
-                  class="history-delete-btn"
-                  title="Remove from history"
-                  type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    send({ type: 'deleteHistoryItem', url: item.url });
-                    historyEntries = historyEntries.filter((h) => h.url !== item.url);
-                  }}
-                >
-                  ×
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-
-      <footer class="tabs-footer history-footer">
-        <button
-          class="clear-history-btn"
-          type="button"
-          onclick={() => {
-            if (confirm('Clear all browsing history?')) {
-              send({ type: 'clearHistory' });
-              historyEntries = [];
-            }
-          }}
-        >
-          Clear Browsing History
-        </button>
-      </footer>
-
-    {:else if section === 'bookmarks'}
-      <div class="filter-wrap">
-        <div class="filter-box">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
-            <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
-            <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search saved bookmarks..."
-            bind:value={filterText}
-            class="filter-input"
-          />
-          {#if filterText}
-            <button class="clear-filter" onclick={() => filterText = ''}>×</button>
-          {/if}
-        </div>
-      </div>
-
-      <!-- Quick Bookmark Active Tab Action -->
-      {#if activeTab && !isBlank(activeTab.url)}
-        <div class="bookmark-action-bar">
-          <button
-            class="bookmark-toggle-btn"
-            class:is-saved={isCurrentTabBookmarked}
-            type="button"
-            onclick={toggleCurrentBookmark}
-          >
-            <span class="star-icon">{isCurrentTabBookmarked ? '★' : '☆'}</span>
-            <span>{isCurrentTabBookmarked ? 'Remove Current Tab from Saved' : 'Bookmark Current Tab'}</span>
-          </button>
-        </div>
-      {/if}
-
-      <div class="body bookmarks-body">
-        {#if filteredBookmarks.length === 0}
-          <div class="empty-state">
-            <span class="empty-icon">★</span>
-            <span class="empty-text">
-              {filterText ? `No bookmarks matching "${filterText}"` : 'No saved bookmarks yet'}
-            </span>
-          </div>
-        {:else}
-          <ul class="bookmarks-list">
-            {#each filteredBookmarks as b (b.id)}
-              <li class="bookmark-item">
-                <button
-                  class="bookmark-row"
-                  type="button"
-                  onclick={() => { send({ type: 'navigate', input: b.url }); close(); }}
-                  title={`${b.title || b.url}\n${b.url}`}
-                >
-                  {#if b.favicon}
-                    <img
-                      src={b.favicon}
-                      alt=""
-                      class="favicon"
-                      onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                    />
-                  {:else}
-                    <span class="favicon-initial">{domainInitial(b.url)}</span>
-                  {/if}
-                  <div class="bookmark-info">
-                    <span class="bookmark-title">{b.title || displayUrl(b.url)}</span>
-                    <span class="bookmark-host">{cleanDomain(b.url)}</span>
-                  </div>
-                </button>
-                <button
-                  class="bookmark-remove-btn"
-                  title="Remove bookmark"
-                  type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    send({ type: 'toggleBookmark', url: b.url, title: b.title });
-                    bookmarksList = bookmarksList.filter((x) => x.id !== b.id);
-                  }}
-                >
-                  ×
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-
-    {:else if section === 'spaces'}
-      <div class="spaces-view-header">
-        <span class="spaces-view-title">Contextual Workspaces</span>
-        <span class="spaces-view-desc">Switch contexts or focus on a specific project</span>
-      </div>
-
-      <div class="body spaces-body">
-        <div class="spaces-grid">
-          {#each SPACES as sp}
-            {@const count = tabs.filter(t => (tabSpaceMap[t.id] || 'personal') === sp.id).length}
-            {@const activeInSpace = tabs.some(t => t.active && (tabSpaceMap[t.id] || 'personal') === sp.id)}
-            <div
-              class="space-card"
-              class:selected={activeSpace === sp.id}
-            >
-              <div class="space-card-header">
-                <span class="space-icon-box" style="background: {sp.color}18; color: {sp.color}">
-                  {sp.icon}
-                </span>
-                <div class="space-card-text">
-                  <div class="space-name-row">
-                    <span class="space-card-name">{sp.name}</span>
-                    {#if activeSpace === sp.id}
-                      <span class="space-current-badge">Active</span>
-                    {/if}
-                    {#if activeInSpace}
-                      <span class="space-live-indicator" title="Current tab belongs here"></span>
-                    {/if}
-                  </div>
-                  <span class="space-card-desc">{sp.desc}</span>
-                </div>
-              </div>
-
-              <div class="space-card-footer">
-                <span class="space-tab-count">{count} {count === 1 ? 'tab' : 'tabs'}</span>
-                <button
-                  class="space-select-btn"
-                  class:active-btn={activeSpace === sp.id}
-                  type="button"
-                  onclick={() => {
-                    setSpace(sp.id);
-                    section = 'tabs';
-                  }}
-                >
-                  {activeSpace === sp.id ? 'Viewing Tabs' : 'Switch Space'}
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <footer class="drawer-footer">
-        <button
-          class="clear-all-btn"
-          type="button"
-          onclick={() => {
-            setSpace('all');
-            section = 'tabs';
-          }}
-        >
-          Show All Tabs Across Spaces
-        </button>
-      </footer>
-
-    {:else if section === 'notes'}
-      <div class="scratchpad-header">
-        <div class="scratchpad-meta">
-          <span class="scratchpad-badge">RESEARCH SCRATCHPAD</span>
-          <span class="scratchpad-count">{noteWords} words · {noteContent.length} chars</span>
-        </div>
-        <div class="scratchpad-actions">
-          {#if activeTab && !isBlank(activeTab.url)}
-            <button
-              class="scratch-action-btn"
-              title="Insert link to active tab"
-              type="button"
-              onclick={insertCurrentTabLink}
-            >
-              + Link Tab
-            </button>
-          {/if}
-          <button
-            class="scratch-action-btn"
-            title="Copy all notes to clipboard"
-            type="button"
-            onclick={copyNotes}
-          >
-            {copiedNotes ? '✓ Copied' : 'Copy'}
-          </button>
-          <button
-            class="scratch-action-btn danger"
-            title="Clear notes"
-            type="button"
-            onclick={() => {
-              if (confirm('Clear scratchpad notes?')) {
-                noteContent = '';
-                send({ type: 'saveNote', content: '' });
-              }
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div class="body scratchpad-body">
-        <textarea
-          class="scratchpad-editor"
-          placeholder="Jot down quick thoughts, research findings, and task notes here...&#10;&#10;• Autosaved locally to your SQLite database.&#10;• Use '+ Link Tab' to insert current page as markdown.&#10;• Copy out to Notion, Slack, or Obsidian."
-          bind:value={noteContent}
-          oninput={onNoteInput}
-          spellcheck="false"
-        ></textarea>
-      </div>
-    {/if}
-
-  {:else}
-    <!-- Right Drawer: Settings, Profiles, Adblock, Hover Preview, Extensions -->
-    <header class="settings-header">
       <div class="brand-row">
         <div class="tabs-brand">
           <img src="/logo.png" alt="Peek" class="drawer-logo" />
-          <span class="drawer-title">Settings & Tools</span>
+          <span class="drawer-title">Workspace</span>
         </div>
         <button class="icon-close-btn" onclick={close} title="Close drawer (Esc)">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="close-icon">
@@ -1191,450 +650,1452 @@
         </button>
       </div>
 
-      <nav class="settings-nav">
-        <button class:on={section === 'general'} onclick={() => (section = 'general')}>General</button>
-        <button class:on={section === 'appearance'} onclick={() => (section = 'appearance')}>Themes</button>
-        <button class:on={section === 'blocking'} onclick={() => (section = 'blocking')}>Adblock</button>
-        <button class:on={section === 'preview'} onclick={() => (section = 'preview')}>Preview</button>
-        <button class:on={section === 'profiles'} onclick={() => (section = 'profiles')}>Profiles</button>
-        <button class:on={section === 'extensions'} onclick={() => (section = 'extensions')}>Extensions</button>
-        <button class:on={section === 'shortcuts'} onclick={() => (section = 'shortcuts')}>Keys</button>
-        <button class:on={section === 'about'} onclick={() => (section = 'about')}>About</button>
+      <nav class="left-nav-pills" aria-label="Views">
+        <button
+          class="left-pill"
+          class:active={section === 'tabs'}
+          onclick={() => { section = 'tabs'; filterText = ''; }}
+          type="button"
+        >
+          Tabs <span class="tab-count-badge">{filteredTabs.length}</span>
+        </button>
+        <button
+          class="left-pill"
+          class:active={section === 'spaces'}
+          onclick={() => { section = 'spaces'; filterText = ''; }}
+          type="button"
+        >
+          Spaces
+        </button>
+        <button
+          class="left-pill"
+          class:active={section === 'history'}
+          onclick={() => { section = 'history'; filterText = ''; send({ type: 'getHistory' }); }}
+          type="button"
+        >
+          History
+        </button>
+        <button
+          class="left-pill"
+          class:active={section === 'bookmarks'}
+          onclick={() => { section = 'bookmarks'; filterText = ''; send({ type: 'getBookmarks' }); }}
+          type="button"
+        >
+          Saved
+        </button>
+        <button
+          class="left-pill"
+          class:active={section === 'notes'}
+          onclick={() => { section = 'notes'; filterText = ''; send({ type: 'getNote' }); }}
+          type="button"
+        >
+          Notes
+        </button>
       </nav>
     </header>
 
-    <div class="body settings-body">
-      {#if section === 'general'}
-        <div class="section-title">Search & Browsing</div>
-        <div class="card settings-card">
-          <div class="field">
-            <label for="search-eng">Default Search Engine</label>
-            <select
-              id="search-eng"
-              value={searchEngine}
-              onchange={(e) => setting('searchEngine', (e.currentTarget as HTMLSelectElement).value)}
+        <div class="filter-wrap">
+          <div class="filter-box">
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              class="filter-icon"
             >
-              <option value="Google">Google</option>
-              <option value="DuckDuckGo">DuckDuckGo</option>
-              <option value="Brave">Brave Search</option>
-              <option value="Bing">Bing</option>
-              <option value="Ecosia">Ecosia</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="side">Default Drawer Side</label>
-            <select
-              id="side"
-              value={configuredDrawerSide}
-              onchange={(e) => setting('drawerSide', (e.currentTarget as HTMLSelectElement).value)}
-            >
-              <option value="right">Right</option>
-              <option value="left">Left</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="edge">Edge Hover Zone (px)</label>
-            <input
-              id="edge"
-              type="number"
-              min="1"
-              max="16"
-              value={edgeZone}
-              onchange={(e) => setting('edgeZone', Number((e.currentTarget as HTMLInputElement).value))}
-            />
-          </div>
-
-          <div class="field switch-field">
-            <span>Always open new tabs with Start Page</span>
-            <label class="switch">
-              <input
-                type="checkbox"
-                checked={startBlank}
-                onchange={(e) => setting('startBlank', (e.currentTarget as HTMLInputElement).checked)}
+              <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke-width="1.6"
+                stroke-linecap="round"
               />
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <div class="section-title" style="margin-top: 18px;">Tab & Memory Budget</div>
-        <div class="card settings-card">
-          <div class="field">
-            <div>
-              <label for="max-live">Max Live Tabs (LRU)</label>
-              <p class="field-desc">Background tabs beyond this count are discarded</p>
-            </div>
+            </svg>
             <input
-              id="max-live"
-              type="number"
-              min="1"
-              max="20"
-              value={maxLive}
-              onchange={(e) => setting('maxLive', Number((e.currentTarget as HTMLInputElement).value))}
+              type="search"
+              placeholder="Filter tabs..."
+              bind:value={filterText}
+              class="filter-input"
             />
+            {#if filterText}
+              <button class="clear-filter" onclick={() => (filterText = "")}
+                >×</button
+              >
+            {/if}
           </div>
+        </div>
 
-          <div class="field" style="border-bottom: none;">
-            <div>
-              <label for="idle-time">Idle Discard (minutes)</label>
-              <p class="field-desc">Inactive background tabs are put to sleep</p>
+        <!-- Memory Saver Dashboard -->
+        <div class="memory-saver-bar">
+          <div class="mem-stat-info">
+            <span class="mem-icon" aria-hidden="true">☾</span>
+            <span class="mem-text">
+              <strong>{liveCount}</strong> live ·
+              <strong>{sleepingCount}</strong>
+              sleeping
+              {#if sleepingCount > 0}
+                <span class="mem-saved">({estimatedMemorySaved}MB saved)</span>
+              {/if}
+            </span>
+          </div>
+          {#if liveCount > 1}
+            <button
+              class="hibernate-btn"
+              title="Hibernate all inactive background tabs to save memory"
+              onclick={hibernateOthers}
+              type="button"
+            >
+              Hibernate Others
+            </button>
+          {/if}
+        </div>
+
+        <div class="body tabs-body">
+          {#if pinnedTabs.length > 0}
+            <div class="tabs-subgroup-header">
+              <span class="subgroup-title">PINNED TABS</span>
+              <span class="subgroup-count">{pinnedTabs.length}</span>
             </div>
-            <input
-              id="idle-time"
-              type="number"
-              min="1"
-              max="120"
-              value={idleMinutes}
-              onchange={(e) => setting('idleDiscardMinutes', Number((e.currentTarget as HTMLInputElement).value))}
-            />
-          </div>
-        </div>
-
-      {:else if section === 'appearance'}
-        <div class="section-title">Color Scheme</div>
-        <div class="theme-options">
-          <button
-            class="choice-btn"
-            class:selected={themeMode === 'system'}
-            onclick={() => applyTheme('system')}
-          >
-            <span class="theme-icon">◐</span>
-            Auto System
-          </button>
-          <button
-            class="choice-btn"
-            class:selected={themeMode === 'dark'}
-            onclick={() => applyTheme('dark')}
-          >
-            <span class="theme-icon">☾</span>
-            Dark Mode
-          </button>
-          <button
-            class="choice-btn"
-            class:selected={themeMode === 'light'}
-            onclick={() => applyTheme('light')}
-          >
-            <span class="theme-icon">☼</span>
-            Light Mode
-          </button>
-        </div>
-
-        <div class="section-title" style="margin-top: 20px;">Accent Hue</div>
-        <div class="card settings-card">
-          <div class="accent-palette">
-            <button
-              class="accent-dot"
-              class:selected={accentColor === 'blue'}
-              style="background: #3b82f6;"
-              onclick={() => applyAccent('blue')}
-              title="Electric Blue"
-            ></button>
-            <button
-              class="accent-dot"
-              class:selected={accentColor === 'purple'}
-              style="background: #8b5cf6;"
-              onclick={() => applyAccent('purple')}
-              title="Neon Violet"
-            ></button>
-            <button
-              class="accent-dot"
-              class:selected={accentColor === 'emerald'}
-              style="background: #10b981;"
-              onclick={() => applyAccent('emerald')}
-              title="Emerald Green"
-            ></button>
-            <button
-              class="accent-dot"
-              class:selected={accentColor === 'amber'}
-              style="background: #f59e0b;"
-              onclick={() => applyAccent('amber')}
-              title="Warm Amber"
-            ></button>
-            <button
-              class="accent-dot"
-              class:selected={accentColor === 'rose'}
-              style="background: #f43f5e;"
-              onclick={() => applyAccent('rose')}
-              title="Rose Quartz"
-            ></button>
-          </div>
-        </div>
-
-      {:else if section === 'blocking'}
-        <div class="card stat-card">
-          <div class="stat-big">{blocked}</div>
-          <div class="stat-label">Trackers & Ads Blocked This Session</div>
-        </div>
-
-        {#if host}
-          <div class="card settings-card" style="margin-top: 14px;">
-            <div class="field switch-field" style="border-bottom: none;">
-              <div>
-                <span class="field-label-bold">Protection on {host}</span>
-                <p class="field-desc">Adblock and tracker protection on current site</p>
+            <ul class="tabs-list pinned-tabs-list">
+              {#each pinnedTabs as tab (tab.id)}
+                <li
+                  class:active={tab.id === activeTabId}
+                  class:discarded={tab.discarded}
+                  class:keyboard-selected={tab.id === keyboardSelectedTabId}
+                  class="is-pinned-tab"
+                >
+                  <button
+                    class="tab-row"
+                    onclick={() => switchTo(tab.id)}
+                    title={`${tab.title || (tab.url === "about:blank" ? "New Tab" : tab.url)}\n${tab.url}`}
+                  >
+                    {#if tab.favicon}
+                      <img
+                        src={tab.favicon}
+                        alt=""
+                        class="favicon"
+                        onerror={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display =
+                            "none";
+                        }}
+                      />
+                    {:else}
+                      <span class="favicon-initial"
+                        >{domainInitial(tab.url)}</span
+                      >
+                    {/if}
+                    <span class="title"
+                      >{tab.title ||
+                        (tab.url === "about:blank" ? "New Tab" : tab.url) ||
+                        "New Tab"}</span
+                    >
+                    {#if tab.audible}
+                      <span class="pill audio" title="Playing audio">
+                        <svg
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          class="pill-icon"
+                        >
+                          <path
+                            d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
+                          />
+                        </svg>
+                        Audio
+                      </span>
+                    {/if}
+                  </button>
+                  {#if tab.audible}
+                    <button
+                      class="tab-audio-btn"
+                      title="Mute / Unmute tab audio"
+                      type="button"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        send({ type: "toggleMuteTab", id: tab.id });
+                      }}
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        class="tab-audio-icon"
+                      >
+                        <path
+                          d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
+                        />
+                      </svg>
+                    </button>
+                  {/if}
+                  <button
+                    class="tab-space-tag"
+                    title={`Space: ${SPACES.find((s) => s.id === (tabSpaceMap[tab.id] || "personal"))?.name} (Click to switch space)`}
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      cycleTabSpace(tab.id);
+                    }}
+                  >
+                    <span
+                      class="space-indicator-dot"
+                      style="background: {SPACES.find(
+                        (s) => s.id === (tabSpaceMap[tab.id] || 'personal'),
+                      )?.color}"
+                    ></span>
+                  </button>
+                  <button
+                    class="tab-pin-btn is-pinned"
+                    title="Unpin tab"
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({ type: "pinTab", id: tab.id, pinned: false });
+                    }}
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      stroke="currentColor"
+                      class="tab-pin-icon"
+                    >
+                      <path
+                        d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"
+                        stroke-width="1.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    class="tab-close"
+                    title="Close tab (Cmd+W)"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({ type: "closeTab", id: tab.id });
+                    }}
+                  >
+                    ×
+                  </button>
+                </li>
+              {/each}
+            </ul>
+            {#if regularTabs.length > 0}
+              <div class="tabs-subgroup-header" style="margin-top: 10px;">
+                <span class="subgroup-title">ALL TABS</span>
+                <span class="subgroup-count">{regularTabs.length}</span>
               </div>
+            {/if}
+          {/if}
+
+          {#if regularTabs.length > 0}
+            <ul class="tabs-list">
+              {#each regularTabs as tab, idx (tab.id)}
+                <li
+                  class:active={tab.id === activeTabId}
+                  class:discarded={tab.discarded}
+                  class:keyboard-selected={tab.id === keyboardSelectedTabId}
+                  draggable="true"
+                  ondragstart={(e) => onDragStart(e, tab.id)}
+                  ondragover={(e) => e.preventDefault()}
+                  ondrop={(e) => onDrop(e, idx)}
+                >
+                  <button
+                    class="tab-row"
+                    onclick={() => switchTo(tab.id)}
+                    title={`${tab.title || (tab.url === "about:blank" ? "New Tab" : tab.url)}\n${tab.url}`}
+                  >
+                    {#if tab.favicon}
+                      <img
+                        src={tab.favicon}
+                        alt=""
+                        class="favicon"
+                        onerror={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display =
+                            "none";
+                        }}
+                      />
+                    {:else}
+                      <span class="favicon-initial"
+                        >{domainInitial(tab.url)}</span
+                      >
+                    {/if}
+                    <span class="title"
+                      >{tab.title ||
+                        (tab.url === "about:blank" ? "New Tab" : tab.url) ||
+                        "New Tab"}</span
+                    >
+                    {#if tab.audible}
+                      <span class="pill audio" title="Playing audio">
+                        <svg
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          class="pill-icon"
+                        >
+                          <path
+                            d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
+                          />
+                        </svg>
+                        Audio
+                      </span>
+                    {/if}
+                    {#if tab.discarded}
+                      <span
+                        class="pill sleep"
+                        title="Tab sleeping to save memory. Click to wake."
+                      >
+                        ☾ Sleeping
+                      </span>
+                    {/if}
+                  </button>
+                  {#if tab.audible}
+                    <button
+                      class="tab-audio-btn"
+                      title="Mute / Unmute tab audio"
+                      type="button"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        send({ type: "toggleMuteTab", id: tab.id });
+                      }}
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        class="tab-audio-icon"
+                      >
+                        <path
+                          d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z"
+                        />
+                      </svg>
+                    </button>
+                  {/if}
+                  <button
+                    class="tab-space-tag"
+                    title={`Space: ${SPACES.find((s) => s.id === (tabSpaceMap[tab.id] || "personal"))?.name} (Click to switch space)`}
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      cycleTabSpace(tab.id);
+                    }}
+                  >
+                    <span
+                      class="space-indicator-dot"
+                      style="background: {SPACES.find(
+                        (s) => s.id === (tabSpaceMap[tab.id] || 'personal'),
+                      )?.color}"
+                    ></span>
+                  </button>
+                  <button
+                    class="tab-pin-btn"
+                    title="Pin tab"
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({ type: "pinTab", id: tab.id, pinned: true });
+                    }}
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      class="tab-pin-icon"
+                    >
+                      <path
+                        d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"
+                        stroke-width="1.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                  {#if !tab.discarded && tab.id !== activeTabId}
+                    <button
+                      class="tab-sleep-btn"
+                      title="Hibernate tab to free memory"
+                      type="button"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        hibernateTab(tab.id);
+                      }}
+                    >
+                      ☾
+                    </button>
+                  {/if}
+                  <button
+                    class="tab-close"
+                    title="Close tab (Cmd+W)"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({ type: "closeTab", id: tab.id });
+                    }}
+                  >
+                    ×
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
+          {#if filteredTabs.length === 0}
+            <div class="empty-state">
+              <span class="empty-icon">🔍</span>
+              <span class="empty-text">No tabs match "{filterText}"</span>
+              <button
+                class="clear-filter-btn"
+                type="button"
+                onclick={() => (filterText = "")}
+              >
+                Clear filter (Esc)
+              </button>
+            </div>
+          {/if}
+        </div>
+
+        <footer class="tabs-footer">
+          <button
+            class="new-tab-btn"
+            onclick={() => {
+              send({ type: "newTab" });
+              close();
+            }}
+          >
+            <span class="plus">+</span> New Tab <kbd>⌘ T</kbd>
+          </button>
+        </footer>
+      {:else if section === "history"}
+        <div class="filter-wrap">
+          <div class="filter-box">
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              class="filter-icon"
+            >
+              <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search browsing history..."
+              bind:value={filterText}
+              class="filter-input"
+            />
+            {#if filterText}
+              <button class="clear-filter" onclick={() => (filterText = "")}
+                >×</button
+              >
+            {/if}
+          </div>
+        </div>
+
+        <div class="body history-body">
+          {#if filteredHistory.length === 0}
+            <div class="empty-state">
+              <span class="empty-icon">📜</span>
+              <span class="empty-text">
+                {filterText
+                  ? `No history matching "${filterText}"`
+                  : "No browsing history yet"}
+              </span>
+            </div>
+          {:else}
+            <ul class="history-list">
+              {#each filteredHistory as item (item.url + ":" + item.lastVisit)}
+                <li class="history-item">
+                  <button
+                    class="history-row"
+                    type="button"
+                    onclick={() => {
+                      send({ type: "navigate", input: item.url });
+                      close();
+                    }}
+                    title={`${item.title || item.url}\n${item.url}`}
+                  >
+                    <span class="favicon-initial"
+                      >{domainInitial(item.url)}</span
+                    >
+                    <div class="history-info">
+                      <span class="history-title"
+                        >{item.title || displayUrl(item.url)}</span
+                      >
+                      <div class="history-sub">
+                        <span class="history-host">{cleanDomain(item.url)}</span
+                        >
+                        {#if item.lastVisit}
+                          <span class="history-dot">·</span>
+                          <span class="history-time"
+                            >{formatRelativeTime(item.lastVisit)}</span
+                          >
+                        {/if}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    class="history-delete-btn"
+                    title="Remove from history"
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({ type: "deleteHistoryItem", url: item.url });
+                      historyEntries = historyEntries.filter(
+                        (h) => h.url !== item.url,
+                      );
+                    }}
+                  >
+                    ×
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <footer class="tabs-footer history-footer">
+          <button
+            class="clear-history-btn"
+            type="button"
+            onclick={() => {
+              if (confirm("Clear all browsing history?")) {
+                send({ type: "clearHistory" });
+                historyEntries = [];
+              }
+            }}
+          >
+            Clear Browsing History
+          </button>
+        </footer>
+      {:else if section === "bookmarks"}
+        <div class="filter-wrap">
+          <div class="filter-box">
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              class="filter-icon"
+            >
+              <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search saved bookmarks..."
+              bind:value={filterText}
+              class="filter-input"
+            />
+            {#if filterText}
+              <button class="clear-filter" onclick={() => (filterText = "")}
+                >×</button
+              >
+            {/if}
+          </div>
+        </div>
+
+        <!-- Quick Bookmark Active Tab Action -->
+        {#if activeTab && !isBlank(activeTab.url)}
+          <div class="bookmark-action-bar">
+            <button
+              class="bookmark-toggle-btn"
+              class:is-saved={isCurrentTabBookmarked}
+              type="button"
+              onclick={toggleCurrentBookmark}
+            >
+              <span class="star-icon">{isCurrentTabBookmarked ? "★" : "☆"}</span
+              >
+              <span
+                >{isCurrentTabBookmarked
+                  ? "Remove Current Tab from Saved"
+                  : "Bookmark Current Tab"}</span
+              >
+            </button>
+          </div>
+        {/if}
+
+        <div class="body bookmarks-body">
+          {#if filteredBookmarks.length === 0}
+            <div class="empty-state">
+              <span class="empty-icon">★</span>
+              <span class="empty-text">
+                {filterText
+                  ? `No bookmarks matching "${filterText}"`
+                  : "No saved bookmarks yet"}
+              </span>
+            </div>
+          {:else}
+            <ul class="bookmarks-list">
+              {#each filteredBookmarks as b (b.id)}
+                <li class="bookmark-item">
+                  <button
+                    class="bookmark-row"
+                    type="button"
+                    onclick={() => {
+                      send({ type: "navigate", input: b.url });
+                      close();
+                    }}
+                    title={`${b.title || b.url}\n${b.url}`}
+                  >
+                    {#if b.favicon}
+                      <img
+                        src={b.favicon}
+                        alt=""
+                        class="favicon"
+                        onerror={(e) => {
+                          (e.currentTarget as HTMLElement).style.display =
+                            "none";
+                        }}
+                      />
+                    {:else}
+                      <span class="favicon-initial">{domainInitial(b.url)}</span
+                      >
+                    {/if}
+                    <div class="bookmark-info">
+                      <span class="bookmark-title"
+                        >{b.title || displayUrl(b.url)}</span
+                      >
+                      <span class="bookmark-host">{cleanDomain(b.url)}</span>
+                    </div>
+                  </button>
+                  <button
+                    class="bookmark-remove-btn"
+                    title="Remove bookmark"
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      send({
+                        type: "toggleBookmark",
+                        url: b.url,
+                        title: b.title,
+                      });
+                      bookmarksList = bookmarksList.filter(
+                        (x) => x.id !== b.id,
+                      );
+                    }}
+                  >
+                    ×
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {:else if section === "spaces"}
+        <div class="spaces-view-header">
+          <span class="spaces-view-title">Contextual Workspaces</span>
+          <span class="spaces-view-desc"
+            >Switch contexts or focus on a specific project</span
+          >
+        </div>
+
+        <div class="body spaces-body">
+          <div class="spaces-grid">
+            {#each SPACES as sp}
+              {@const count = tabs.filter(
+                (t) => (tabSpaceMap[t.id] || "personal") === sp.id,
+              ).length}
+              {@const activeInSpace = tabs.some(
+                (t) => t.active && (tabSpaceMap[t.id] || "personal") === sp.id,
+              )}
+              <div class="space-card" class:selected={activeSpace === sp.id}>
+                <div class="space-card-header">
+                  <span
+                    class="space-icon-box"
+                    style="background: {sp.color}18; color: {sp.color}"
+                  >
+                    {sp.icon}
+                  </span>
+                  <div class="space-card-text">
+                    <div class="space-name-row">
+                      <span class="space-card-name">{sp.name}</span>
+                      {#if activeSpace === sp.id}
+                        <span class="space-current-badge">Active</span>
+                      {/if}
+                      {#if activeInSpace}
+                        <span
+                          class="space-live-indicator"
+                          title="Current tab belongs here"
+                        ></span>
+                      {/if}
+                    </div>
+                    <span class="space-card-desc">{sp.desc}</span>
+                  </div>
+                </div>
+
+                <div class="space-card-footer">
+                  <span class="space-tab-count"
+                    >{count} {count === 1 ? "tab" : "tabs"}</span
+                  >
+                  <button
+                    class="space-select-btn"
+                    class:active-btn={activeSpace === sp.id}
+                    type="button"
+                    onclick={() => {
+                      setSpace(sp.id);
+                      section = "tabs";
+                    }}
+                  >
+                    {activeSpace === sp.id ? "Viewing Tabs" : "Switch Space"}
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <footer class="drawer-footer">
+          <button
+            class="clear-all-btn"
+            type="button"
+            onclick={() => {
+              setSpace("all");
+              section = "tabs";
+            }}
+          >
+            Show All Tabs Across Spaces
+          </button>
+        </footer>
+      {:else if section === "notes"}
+        <div class="scratchpad-header">
+          <div class="scratchpad-meta">
+            <span class="scratchpad-badge">RESEARCH SCRATCHPAD</span>
+            <span class="scratchpad-count"
+              >{noteWords} words · {noteContent.length} chars</span
+            >
+          </div>
+          <div class="scratchpad-actions">
+            {#if activeTab && !isBlank(activeTab.url)}
+              <button
+                class="scratch-action-btn"
+                title="Insert link to active tab"
+                type="button"
+                onclick={insertCurrentTabLink}
+              >
+                + Link Tab
+              </button>
+            {/if}
+            <button
+              class="scratch-action-btn"
+              title="Copy all notes to clipboard"
+              type="button"
+              onclick={copyNotes}
+            >
+              {copiedNotes ? "✓ Copied" : "Copy"}
+            </button>
+            <button
+              class="scratch-action-btn danger"
+              title="Clear notes"
+              type="button"
+              onclick={() => {
+                if (confirm("Clear scratchpad notes?")) {
+                  noteContent = "";
+                  send({ type: "saveNote", content: "" });
+                }
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="body scratchpad-body">
+          <textarea
+            class="scratchpad-editor"
+            placeholder="Jot down quick thoughts, research findings, and task notes here...&#10;&#10;• Autosaved locally to your SQLite database.&#10;• Use '+ Link Tab' to insert current page as markdown.&#10;• Copy out to Notion, Slack, or Obsidian."
+            bind:value={noteContent}
+            oninput={onNoteInput}
+            spellcheck="false"></textarea>
+        </div>
+      {/if}
+    {:else}
+      <!-- Right Drawer: Settings, Profiles, Adblock, Hover Preview, Extensions -->
+      <header class="settings-header">
+        <div class="brand-row">
+          <div class="tabs-brand">
+            <img src="/logo.png" alt="Peek" class="drawer-logo" />
+            <span class="drawer-title">Settings & Tools</span>
+          </div>
+          <button
+            class="icon-close-btn"
+            onclick={close}
+            title="Close drawer (Esc)"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              class="close-icon"
+            >
+              <path
+                d="M4 4l8 8M12 4l-8 8"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <nav class="settings-nav">
+          <button
+            class:on={section === "general"}
+            onclick={() => (section = "general")}>General</button
+          >
+          <button
+            class:on={section === "appearance"}
+            onclick={() => (section = "appearance")}>Themes</button
+          >
+          <button
+            class:on={section === "blocking"}
+            onclick={() => (section = "blocking")}>Adblock</button
+          >
+          <button
+            class:on={section === "preview"}
+            onclick={() => (section = "preview")}>Preview</button
+          >
+          <button
+            class:on={section === "profiles"}
+            onclick={() => (section = "profiles")}>Profiles</button
+          >
+          <button
+            class:on={section === "extensions"}
+            onclick={() => (section = "extensions")}>Extensions</button
+          >
+          <button
+            class:on={section === "shortcuts"}
+            onclick={() => (section = "shortcuts")}>Keys</button
+          >
+          <button
+            class:on={section === "about"}
+            onclick={() => (section = "about")}>About</button
+          >
+        </nav>
+      </header>
+
+      <div class="body settings-body">
+        {#if section === "general"}
+          <div class="section-title">Search & Browsing</div>
+          <div class="card settings-card">
+            <div class="field">
+              <label for="search-eng">Default Search Engine</label>
+              <select
+                id="search-eng"
+                value={searchEngine}
+                onchange={(e) =>
+                  setting(
+                    "searchEngine",
+                    (e.currentTarget as HTMLSelectElement).value,
+                  )}
+              >
+                <option value="Google">Google</option>
+                <option value="DuckDuckGo">DuckDuckGo</option>
+                <option value="Brave">Brave Search</option>
+                <option value="Bing">Bing</option>
+                <option value="Ecosia">Ecosia</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="side">Default Drawer Side</label>
+              <select
+                id="side"
+                value={configuredDrawerSide}
+                onchange={(e) =>
+                  setting(
+                    "drawerSide",
+                    (e.currentTarget as HTMLSelectElement).value,
+                  )}
+              >
+                <option value="right">Right</option>
+                <option value="left">Left</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="edge">Edge Hover Zone (px)</label>
+              <input
+                id="edge"
+                type="number"
+                min="1"
+                max="16"
+                value={edgeZone}
+                onchange={(e) =>
+                  setting(
+                    "edgeZone",
+                    Number((e.currentTarget as HTMLInputElement).value),
+                  )}
+              />
+            </div>
+
+            <div class="field switch-field">
+              <span>Always open new tabs with Start Page</span>
               <label class="switch">
                 <input
                   type="checkbox"
-                  checked={!allowedOnSite}
-                  onchange={() => { if (host) send({ type: 'setSiteAdblock', host, enabled: allowedOnSite }); }}
+                  checked={startBlank}
+                  onchange={(e) =>
+                    setting(
+                      "startBlank",
+                      (e.currentTarget as HTMLInputElement).checked,
+                    )}
                 />
                 <span class="slider"></span>
               </label>
             </div>
           </div>
-        {/if}
 
-        <div class="section-title" style="margin-top: 18px;">Built-in Privacy Engine</div>
-        <div class="card settings-card">
-          <div class="filter-item">
-            <div class="filter-status-dot"></div>
-            <div>
-              <div class="filter-name">EasyList & EasyPrivacy</div>
-              <div class="filter-desc">Network-level blocking & cosmetic filtering</div>
+          <div class="section-title" style="margin-top: 18px;">
+            Tab & Memory Budget
+          </div>
+          <div class="card settings-card">
+            <div class="field">
+              <div>
+                <label for="max-live">Max Live Tabs (LRU)</label>
+                <p class="field-desc">
+                  Background tabs beyond this count are discarded
+                </p>
+              </div>
+              <input
+                id="max-live"
+                type="number"
+                min="1"
+                max="20"
+                value={maxLive}
+                onchange={(e) =>
+                  setting(
+                    "maxLive",
+                    Number((e.currentTarget as HTMLInputElement).value),
+                  )}
+              />
+            </div>
+
+            <div class="field" style="border-bottom: none;">
+              <div>
+                <label for="idle-time">Idle Discard (minutes)</label>
+                <p class="field-desc">
+                  Inactive background tabs are put to sleep
+                </p>
+              </div>
+              <input
+                id="idle-time"
+                type="number"
+                min="1"
+                max="120"
+                value={idleMinutes}
+                onchange={(e) =>
+                  setting(
+                    "idleDiscardMinutes",
+                    Number((e.currentTarget as HTMLInputElement).value),
+                  )}
+              />
             </div>
           </div>
-          <div class="filter-item">
-            <div class="filter-status-dot"></div>
-            <div>
-              <div class="filter-name">uBlock Origin Filters</div>
-              <div class="filter-desc">Anti-malware & behavioral telemetry prevention</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card settings-card" style="margin-top: 14px;">
-          <div class="field" style="border-bottom: none;">
-            <div>
-              <span class="field-label-bold">Cookies & Local Storage</span>
-              <p class="field-desc">{cookiesCount} stored domain cookies</p>
-            </div>
-            <button class="danger-btn" onclick={() => send({ type: 'clearCookies' })}>
-              Clear Data
+        {:else if section === "appearance"}
+          <div class="section-title">Color Scheme</div>
+          <div class="theme-options">
+            <button
+              class="choice-btn"
+              class:selected={themeMode === "system"}
+              onclick={() => applyTheme("system")}
+            >
+              <span class="theme-icon">◐</span>
+              Auto System
+            </button>
+            <button
+              class="choice-btn"
+              class:selected={themeMode === "dark"}
+              onclick={() => applyTheme("dark")}
+            >
+              <span class="theme-icon">☾</span>
+              Dark Mode
+            </button>
+            <button
+              class="choice-btn"
+              class:selected={themeMode === "light"}
+              onclick={() => applyTheme("light")}
+            >
+              <span class="theme-icon">☼</span>
+              Light Mode
             </button>
           </div>
-        </div>
 
-      {:else if section === 'preview'}
-        <div class="section-title">Hover Preview & Link QuickLook</div>
-        <div class="card settings-card">
-          <div class="field" style="background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">
-            <div>
-              <span class="field-label-bold" style="color: var(--accent);">✦ Space to Peek (Finder QuickLook)</span>
-              <p class="field-desc">Hover over any link and press <kbd style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);">Space</kbd> or hold <kbd style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);">Shift</kbd> to pop open an instant live card preview.</p>
+          <div class="section-title" style="margin-top: 20px;">Accent Hue</div>
+          <div class="card settings-card">
+            <div class="accent-palette">
+              <button
+                class="accent-dot"
+                class:selected={accentColor === "blue"}
+                style="background: #3b82f6;"
+                onclick={() => applyAccent("blue")}
+                title="Electric Blue"
+              ></button>
+              <button
+                class="accent-dot"
+                class:selected={accentColor === "purple"}
+                style="background: #8b5cf6;"
+                onclick={() => applyAccent("purple")}
+                title="Neon Violet"
+              ></button>
+              <button
+                class="accent-dot"
+                class:selected={accentColor === "emerald"}
+                style="background: #10b981;"
+                onclick={() => applyAccent("emerald")}
+                title="Emerald Green"
+              ></button>
+              <button
+                class="accent-dot"
+                class:selected={accentColor === "amber"}
+                style="background: #f59e0b;"
+                onclick={() => applyAccent("amber")}
+                title="Warm Amber"
+              ></button>
+              <button
+                class="accent-dot"
+                class:selected={accentColor === "rose"}
+                style="background: #f43f5e;"
+                onclick={() => applyAccent("rose")}
+                title="Rose Quartz"
+              ></button>
+            </div>
+          </div>
+        {:else if section === "blocking"}
+          <div class="card stat-card">
+            <div class="stat-big">{blocked}</div>
+            <div class="stat-label">Trackers & Ads Blocked This Session</div>
+          </div>
+
+          {#if host}
+            <div class="card settings-card" style="margin-top: 14px;">
+              <div class="field switch-field" style="border-bottom: none;">
+                <div>
+                  <span class="field-label-bold">Protection on {host}</span>
+                  <p class="field-desc">
+                    Adblock and tracker protection on current site
+                  </p>
+                </div>
+                <label class="switch">
+                  <input
+                    type="checkbox"
+                    checked={!allowedOnSite}
+                    onchange={() => {
+                      if (host)
+                        send({
+                          type: "setSiteAdblock",
+                          host,
+                          enabled: allowedOnSite,
+                        });
+                    }}
+                  />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          {/if}
+
+          <div class="section-title" style="margin-top: 18px;">
+            Built-in Privacy Engine
+          </div>
+          <div class="card settings-card">
+            <div class="filter-item">
+              <div class="filter-status-dot"></div>
+              <div>
+                <div class="filter-name">EasyList & EasyPrivacy</div>
+                <div class="filter-desc">
+                  Network-level blocking & cosmetic filtering
+                </div>
+              </div>
+            </div>
+            <div class="filter-item">
+              <div class="filter-status-dot"></div>
+              <div>
+                <div class="filter-name">uBlock Origin Filters</div>
+                <div class="filter-desc">
+                  Anti-malware & behavioral telemetry prevention
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="field switch-field">
-            <div>
-              <span class="field-label-bold">Require Modifier Key</span>
-              <p class="field-desc">Require ⌘ or Shift key to trigger preview on hover</p>
+          <div class="card settings-card" style="margin-top: 14px;">
+            <div class="field" style="border-bottom: none;">
+              <div>
+                <span class="field-label-bold">Cookies & Local Storage</span>
+                <p class="field-desc">{cookiesCount} stored domain cookies</p>
+              </div>
+              <button
+                class="danger-btn"
+                onclick={() => send({ type: "clearCookies" })}
+              >
+                Clear Data
+              </button>
             </div>
-            <label class="switch">
+          </div>
+        {:else if section === "preview"}
+          <div class="section-title">Hover Preview & Link QuickLook</div>
+          <div class="card settings-card">
+            <div
+              class="field"
+              style="background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;"
+            >
+              <div>
+                <span class="field-label-bold" style="color: var(--accent);"
+                  >✦ Space to Peek (Finder QuickLook)</span
+                >
+                <p class="field-desc">
+                  Hover over any link and press <kbd
+                    style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);"
+                    >Space</kbd
+                  >
+                  or hold
+                  <kbd
+                    style="background: var(--surface); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);"
+                    >Shift</kbd
+                  > to pop open an instant live card preview.
+                </p>
+              </div>
+            </div>
+
+            <div class="field switch-field">
+              <div>
+                <span class="field-label-bold">Require Modifier Key</span>
+                <p class="field-desc">
+                  Require ⌘ or Shift key to trigger preview on hover
+                </p>
+              </div>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  checked={previewModifierOnly}
+                  onchange={(e) => {
+                    previewModifierOnly = (e.currentTarget as HTMLInputElement)
+                      .checked;
+                    setting("previewModifierOnly", previewModifierOnly);
+                  }}
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label for="h-delay">Hover Delay (ms)</label>
               <input
-                type="checkbox"
-                checked={previewModifierOnly}
+                id="h-delay"
+                type="number"
+                min="50"
+                max="1500"
+                step="50"
+                value={hoverDelay}
                 onchange={(e) => {
-                  previewModifierOnly = (e.currentTarget as HTMLInputElement).checked;
-                  setting('previewModifierOnly', previewModifierOnly);
+                  hoverDelay = Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  );
+                  setting("hoverDelayMs", hoverDelay);
                 }}
               />
-              <span class="slider"></span>
-            </label>
-          </div>
+            </div>
 
-          <div class="field">
-            <label for="h-delay">Hover Delay (ms)</label>
-            <input
-              id="h-delay"
-              type="number"
-              min="50"
-              max="1500"
-              step="50"
-              value={hoverDelay}
-              onchange={(e) => {
-                hoverDelay = Number((e.currentTarget as HTMLInputElement).value);
-                setting('hoverDelayMs', hoverDelay);
-              }}
-            />
-          </div>
+            <div class="field">
+              <label for="p-width">Preview Width (px)</label>
+              <input
+                id="p-width"
+                type="number"
+                min="320"
+                max="800"
+                step="20"
+                value={previewWidth}
+                onchange={(e) => {
+                  previewWidth = Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  );
+                  setting("previewWidth", previewWidth);
+                }}
+              />
+            </div>
 
-          <div class="field">
-            <label for="p-width">Preview Width (px)</label>
-            <input
-              id="p-width"
-              type="number"
-              min="320"
-              max="800"
-              step="20"
-              value={previewWidth}
-              onchange={(e) => {
-                previewWidth = Number((e.currentTarget as HTMLInputElement).value);
-                setting('previewWidth', previewWidth);
-              }}
-            />
-          </div>
+            <div class="field">
+              <label for="p-height">Preview Height (px)</label>
+              <input
+                id="p-height"
+                type="number"
+                min="200"
+                max="600"
+                step="20"
+                value={previewHeight}
+                onchange={(e) => {
+                  previewHeight = Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  );
+                  setting("previewHeight", previewHeight);
+                }}
+              />
+            </div>
 
-          <div class="field">
-            <label for="p-height">Preview Height (px)</label>
-            <input
-              id="p-height"
-              type="number"
-              min="200"
-              max="600"
-              step="20"
-              value={previewHeight}
-              onchange={(e) => {
-                previewHeight = Number((e.currentTarget as HTMLInputElement).value);
-                setting('previewHeight', previewHeight);
-              }}
-            />
+            <div class="field" style="border-bottom: none;">
+              <label for="p-zoom">Preview Zoom Ratio</label>
+              <input
+                id="p-zoom"
+                type="number"
+                min="0.5"
+                max="1.0"
+                step="0.05"
+                value={previewZoom}
+                onchange={(e) => {
+                  previewZoom = Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  );
+                  setting("previewZoom", previewZoom);
+                }}
+              />
+            </div>
           </div>
-
-          <div class="field" style="border-bottom: none;">
-            <label for="p-zoom">Preview Zoom Ratio</label>
-            <input
-              id="p-zoom"
-              type="number"
-              min="0.5"
-              max="1.0"
-              step="0.05"
-              value={previewZoom}
-              onchange={(e) => {
-                previewZoom = Number((e.currentTarget as HTMLInputElement).value);
-                setting('previewZoom', previewZoom);
-              }}
-            />
-          </div>
-        </div>
-
-      {:else if section === 'profiles'}
-        <div class="section-title">Active Profiles</div>
-        <ul class="profile-list">
-          {#each profiles as p}
-            <li class="profile-item card" class:active-profile={p === activeProfile}>
-              <div class="profile-info">
-                <div class="profile-avatar">{p[0].toUpperCase()}</div>
-                <div class="profile-meta">
-                  <div class="profile-name-row">
-                    <span class="profile-name">{p}</span>
-                    {#if p === activeProfile}
-                      <span class="profile-badge">Active</span>
-                    {/if}
+        {:else if section === "profiles"}
+          <div class="section-title">Active Profiles</div>
+          <ul class="profile-list">
+            {#each profiles as p}
+              <li
+                class="profile-item card"
+                class:active-profile={p === activeProfile}
+              >
+                <div class="profile-info">
+                  <div class="profile-avatar">{p[0].toUpperCase()}</div>
+                  <div class="profile-meta">
+                    <div class="profile-name-row">
+                      <span class="profile-name">{p}</span>
+                      {#if p === activeProfile}
+                        <span class="profile-badge">Active</span>
+                      {/if}
+                    </div>
+                    <span class="profile-subtext">
+                      {p === activeProfile
+                        ? "Current workspace profile"
+                        : "Isolated browsing profile"}
+                    </span>
                   </div>
-                  <span class="profile-subtext">
-                    {p === activeProfile ? 'Current workspace profile' : 'Isolated browsing profile'}
-                  </span>
                 </div>
-              </div>
-              <div class="profile-actions">
-                {#if p !== activeProfile}
-                  <button class="switch-profile-btn" onclick={() => handleSwitchProfile(p)}>
-                    Switch
-                  </button>
-                  <button
-                    class="delete-profile-btn"
-                    onclick={() => handleDeleteProfile(p)}
-                    title="Delete profile"
-                  >
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="action-icon">
-                      <path d="M3 4.5h10M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5M6 7.5v5M10 7.5v5M4.5 4.5l.7 9a1.5 1.5 0 001.5 1.4h4.6a1.5 1.5 0 001.5-1.4l.7-9" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ul>
-
-        <div class="card create-profile-card">
-          <div class="create-profile-header">
-            <span class="create-title">Create New Profile</span>
-            <span class="create-desc">Isolated cookies, history, tabs, and storage</span>
-          </div>
-          <div class="create-profile-input-wrap">
-            <input
-              type="text"
-              placeholder="Profile name (e.g. Work, Research)"
-              bind:value={newProfileName}
-              onkeydown={(e) => { if (e.key === 'Enter') handleCreateProfile(); }}
-              class="create-profile-input"
-            />
-            <button class="create-profile-btn" onclick={handleCreateProfile}>
-              Create
-            </button>
-          </div>
-        </div>
-
-      {:else if section === 'extensions'}
-        <div class="section-title">Install Chrome Extension (MV3)</div>
-        <div class="card settings-card">
-          <p class="field-desc" style="margin-bottom: 8px;">
-            Supports Manifest V3 unpacked directories and .crx packages with isolated content scripts.
-          </p>
-          <div class="input-action-row">
-            <input
-              type="text"
-              placeholder="/path/to/extension or extension.crx"
-              bind:value={extensionInstallPath}
-              class="text-input"
-            />
-            <button class="primary-btn" onclick={handleInstallExtension}>Install</button>
-          </div>
-        </div>
-
-        <div class="section-title" style="margin-top: 18px;">Installed Extensions ({extensions.length})</div>
-        {#if extensions.length === 0}
-          <div class="card empty-card">
-            <div class="empty-icon">🧩</div>
-            <p class="note">No extensions installed yet. Enter an unpacked directory path above to install.</p>
-          </div>
-        {:else}
-          <div class="extensions-list">
-            {#each extensions as ext (ext.id)}
-              <div class="card ext-card">
-                <div class="ext-header">
-                  <div>
-                    <div class="ext-title">{ext.name} <span class="ext-version">v{ext.version}</span></div>
-                    <div class="ext-id">{ext.id}</div>
-                  </div>
-                  <div class="ext-controls">
-                    <label class="switch">
-                      <input
-                        type="checkbox"
-                        checked={ext.enabled}
-                        onchange={() => handleToggleExtension(ext.id, ext.enabled)}
-                      />
-                      <span class="slider"></span>
-                    </label>
-                    <button class="danger-icon-btn" onclick={() => handleUninstallExtension(ext.id)} title="Uninstall">
-                      ✕
+                <div class="profile-actions">
+                  {#if p !== activeProfile}
+                    <button
+                      class="switch-profile-btn"
+                      onclick={() => handleSwitchProfile(p)}
+                    >
+                      Switch
                     </button>
-                  </div>
-                </div>
-
-                <div class="ext-badges">
-                  {#if ext.fullySupported}
-                    <span class="badge verified">Tier 1 Verified</span>
-                  {:else}
-                    <span class="badge partial">Partial MV3</span>
+                    <button
+                      class="delete-profile-btn"
+                      onclick={() => handleDeleteProfile(p)}
+                      title="Delete profile"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        class="action-icon"
+                      >
+                        <path
+                          d="M3 4.5h10M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5M6 7.5v5M10 7.5v5M4.5 4.5l.7 9a1.5 1.5 0 001.5 1.4h4.6a1.5 1.5 0 001.5-1.4l.7-9"
+                          stroke-width="1.3"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
                   {/if}
                 </div>
-              </div>
+              </li>
             {/each}
+          </ul>
+
+          <div class="card create-profile-card">
+            <div class="create-profile-header">
+              <span class="create-title">Create New Profile</span>
+              <span class="create-desc"
+                >Isolated cookies, history, tabs, and storage</span
+              >
+            </div>
+            <div class="create-profile-input-wrap">
+              <input
+                type="text"
+                placeholder="Profile name (e.g. Work, Research)"
+                bind:value={newProfileName}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") handleCreateProfile();
+                }}
+                class="create-profile-input"
+              />
+              <button class="create-profile-btn" onclick={handleCreateProfile}>
+                Create
+              </button>
+            </div>
+          </div>
+        {:else if section === "extensions"}
+          <div class="section-title">Install Chrome Extension (MV3)</div>
+          <div class="card settings-card">
+            <p class="field-desc" style="margin-bottom: 8px;">
+              Supports Manifest V3 unpacked directories and .crx packages with
+              isolated content scripts.
+            </p>
+            <div class="input-action-row">
+              <input
+                type="text"
+                placeholder="/path/to/extension or extension.crx"
+                bind:value={extensionInstallPath}
+                class="text-input"
+              />
+              <button class="primary-btn" onclick={handleInstallExtension}
+                >Install</button
+              >
+            </div>
+          </div>
+
+          <div class="section-title" style="margin-top: 18px;">
+            Installed Extensions ({extensions.length})
+          </div>
+          {#if extensions.length === 0}
+            <div class="card empty-card">
+              <div class="empty-icon">🧩</div>
+              <p class="note">
+                No extensions installed yet. Enter an unpacked directory path
+                above to install.
+              </p>
+            </div>
+          {:else}
+            <div class="extensions-list">
+              {#each extensions as ext (ext.id)}
+                <div class="card ext-card">
+                  <div class="ext-header">
+                    <div>
+                      <div class="ext-title">
+                        {ext.name}
+                        <span class="ext-version">v{ext.version}</span>
+                      </div>
+                      <div class="ext-id">{ext.id}</div>
+                    </div>
+                    <div class="ext-controls">
+                      <label class="switch">
+                        <input
+                          type="checkbox"
+                          checked={ext.enabled}
+                          onchange={() =>
+                            handleToggleExtension(ext.id, ext.enabled)}
+                        />
+                        <span class="slider"></span>
+                      </label>
+                      <button
+                        class="danger-icon-btn"
+                        onclick={() => handleUninstallExtension(ext.id)}
+                        title="Uninstall"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="ext-badges">
+                    {#if ext.fullySupported}
+                      <span class="badge verified">Tier 1 Verified</span>
+                    {:else}
+                      <span class="badge partial">Partial MV3</span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {:else if section === "shortcuts"}
+          <div class="section-title">Navigation & Window</div>
+          <div class="shortcut-list card settings-card">
+            <div class="key-row">
+              <kbd>⌘ L</kbd> <span>Focus address and search bar</span>
+            </div>
+            <div class="key-row">
+              <kbd>⌘ T</kbd> <span>Open blank new tab</span>
+            </div>
+            <div class="key-row">
+              <kbd>⌘ W</kbd> <span>Close current active tab</span>
+            </div>
+            <div class="key-row">
+              <kbd>⌘ R</kbd> <span>Reload current page</span>
+            </div>
+            <div class="key-row">
+              <kbd>Alt + ← / →</kbd> <span>Go back / forward in history</span>
+            </div>
+          </div>
+
+          <div class="section-title" style="margin-top: 16px;">
+            Peek Gestures & Signatures
+          </div>
+          <div class="shortcut-list card settings-card">
+            <div class="key-row">
+              <kbd>Space</kbd>
+              <span>QuickLook preview hovered link (Finder style)</span>
+            </div>
+            <div class="key-row">
+              <kbd>⇧ / ⌘ + Hover</kbd> <span>Trigger live link preview</span>
+            </div>
+            <div class="key-row">
+              <kbd>Swipe Bar ⇄</kbd>
+              <span>2-finger horizontal swipe top bar to switch tabs</span>
+            </div>
+            <div class="key-row">
+              <kbd>Edge Swipe ⇥</kbd>
+              <span>Swipe from trackpad left/right edges to open drawers</span>
+            </div>
+            <div class="key-row">
+              <kbd>⌘ ⇧ [</kbd> <span>Toggle vertical tabs drawer</span>
+            </div>
+            <div class="key-row">
+              <kbd>⌘ ⇧ ]</kbd> <span>Toggle settings & tools drawer</span>
+            </div>
+            <div class="key-row">
+              <kbd>Esc</kbd> <span>Dismiss preview or close drawer</span>
+            </div>
+          </div>
+        {:else if section === "about"}
+          <div class="hero-brand" style="margin: 20px 0;">
+            <img
+              src="/logo.png"
+              alt="Peek"
+              class="drawer-logo"
+              style="width: 48px; height: 48px;"
+            />
+            <h2 style="margin: 10px 0 2px; font-size: 19px; font-weight: 700;">
+              Peek Browser
+            </h2>
+            <span style="font-size: 12px; color: var(--muted);"
+              >v0.1.0 • Pure Rust Native Architecture</span
+            >
+          </div>
+          <div class="card settings-card">
+            <p class="note">
+              Peek is built with zero framework bloat using direct <code
+                >tao</code
+              >
+              and <code>wry</code> bindings, native system WebViews, Brave adblock
+              engine, and an ephemeral hover preview architecture.
+            </p>
+          </div>
+          <div class="card settings-card" style="margin-top: 12px;">
+            <div class="tech-row">
+              <span>Engine</span> <strong>tao + wry (WebKit/WebView2)</strong>
+            </div>
+            <div class="tech-row">
+              <span>Database</span>
+              <strong>SQLite FTS5 + Connection Pool</strong>
+            </div>
+            <div class="tech-row">
+              <span>Adblock</span> <strong>Brave Adblock Engine (Rust)</strong>
+            </div>
+            <div class="tech-row">
+              <span>Extensions</span> <strong>Manifest V3 Host Engine</strong>
+            </div>
           </div>
         {/if}
+      </div>
 
-      {:else if section === 'shortcuts'}
-        <div class="section-title">Navigation & Window</div>
-        <div class="shortcut-list card settings-card">
-          <div class="key-row"><kbd>⌘ L</kbd> <span>Focus address and search bar</span></div>
-          <div class="key-row"><kbd>⌘ T</kbd> <span>Open blank new tab</span></div>
-          <div class="key-row"><kbd>⌘ W</kbd> <span>Close current active tab</span></div>
-          <div class="key-row"><kbd>⌘ R</kbd> <span>Reload current page</span></div>
-          <div class="key-row"><kbd>Alt + ← / →</kbd> <span>Go back / forward in history</span></div>
+      <footer class="settings-footer">
+        <div class="footer-meta">
+          <span class="footer-brand">Peek</span>
+          <span class="footer-version">v0.1.0</span>
         </div>
 
         <div class="section-title" style="margin-top: 16px;">Peek Gestures & Signatures</div>
@@ -1649,21 +2110,81 @@
         </div>
 
       {:else if section === 'about'}
-        <div class="hero-brand" style="margin: 20px 0;">
-          <img src="/logo.png" alt="Peek" class="drawer-logo" style="width: 48px; height: 48px;" />
-          <h2 style="margin: 10px 0 2px; font-size: 19px; font-weight: 700;">Peek Browser</h2>
-          <span style="font-size: 12px; color: var(--muted);">v0.1.0 • Pure Rust Native Architecture</span>
+        <div class="about-hero">
+          <img src="/logo.png" alt="Peek" class="about-logo" />
+          <h2 class="about-name">Peek Browser</h2>
+          <span class="about-tagline">v0.1.0 • Pure Rust Native Architecture</span>
         </div>
-        <div class="card settings-card">
+
+        <!-- Star on GitHub & Community Card -->
+        <div class="card settings-card github-star-card">
+          <div class="github-card-header">
+            <div class="github-badge-row">
+              <svg class="github-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              <span class="github-title">Open Source on GitHub</span>
+            </div>
+            <span class="github-stars-badge">⭐ Star</span>
+          </div>
+
+          <p class="github-card-desc">
+            If you like Peek, please give our repository a star on GitHub! Your support helps independent, lightweight browser innovation grow.
+          </p>
+
+          <div class="github-actions">
+            <button
+              class="btn-star-repo"
+              type="button"
+              onclick={() => {
+                send({ type: 'openUrl', url: 'https://github.com/senapati484/peek' });
+                close();
+              }}
+              title="Give Peek a star on GitHub"
+            >
+              <span class="star-sparkle">⭐</span>
+              <span class="star-label">Star Peek on GitHub</span>
+              <span class="out-arrow">↗</span>
+            </button>
+            <button
+              class="btn-repo-issues"
+              type="button"
+              onclick={() => {
+                send({ type: 'openUrl', url: 'https://github.com/senapati484/peek/issues' });
+                close();
+              }}
+              title="Report an issue or suggest a feature on GitHub"
+            >
+              <span>Feedback & Issues</span>
+              <span class="out-arrow">↗</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card settings-card" style="margin-top: 12px;">
           <p class="note">
             Peek is built with zero framework bloat using direct <code>tao</code> and <code>wry</code> bindings, native system WebViews, Brave adblock engine, and an ephemeral hover preview architecture.
           </p>
         </div>
+
         <div class="card settings-card" style="margin-top: 12px;">
           <div class="tech-row"><span>Engine</span> <strong>tao + wry (WebKit/WebView2)</strong></div>
           <div class="tech-row"><span>Database</span> <strong>SQLite FTS5 + Connection Pool</strong></div>
           <div class="tech-row"><span>Adblock</span> <strong>Brave Adblock Engine (Rust)</strong></div>
           <div class="tech-row"><span>Extensions</span> <strong>Manifest V3 Host Engine</strong></div>
+          <div class="tech-row">
+            <span>Repository</span>
+            <button
+              class="repo-inline-link"
+              type="button"
+              onclick={() => {
+                send({ type: 'openUrl', url: 'https://github.com/senapati484/peek' });
+                close();
+              }}
+            >
+              github.com/senapati484/peek ↗
+            </button>
+          </div>
         </div>
       {/if}
     </div>
@@ -1672,6 +2193,18 @@
       <div class="footer-meta">
         <span class="footer-brand">Peek</span>
         <span class="footer-version">v0.1.0</span>
+        <span class="footer-dot">•</span>
+        <button
+          class="footer-gh-link"
+          type="button"
+          onclick={() => {
+            send({ type: 'openUrl', url: 'https://github.com/senapati484/peek' });
+            close();
+          }}
+          title="Open GitHub Repository"
+        >
+          ⭐ Star on GitHub
+        </button>
       </div>
       <button class="quit-action-btn" onclick={() => send({ type: 'quit' })}>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="quit-icon">
@@ -1722,19 +2255,15 @@
     padding: 12px 14px 10px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-  }
-
-  .tabs-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .brand-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
   }
 
   .tabs-brand {
@@ -1744,44 +2273,55 @@
   }
 
   .left-nav-pills {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 2px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    padding: 3px;
     background: var(--surface-2);
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    border-radius: 9px;
   }
 
   .left-pill {
     all: unset;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 2px;
     border-radius: 6px;
     font-size: 11px;
     font-weight: 550;
     color: var(--muted);
     cursor: pointer;
     transition: all 0.14s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .left-pill:hover {
     color: var(--text);
-    background: var(--hover);
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 
   .left-pill.active {
-    background: var(--panel);
+    background: var(--surface);
     color: var(--text);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-sm);
     font-weight: 600;
   }
 
   .left-pill .tab-count-badge {
     font-size: 9.5px;
-    padding: 0 5px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+
+  .left-pill.active .tab-count-badge {
+    color: var(--text);
   }
 
   .drawer-logo {
@@ -2331,7 +2871,10 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    transition:
+      opacity 0.12s ease,
+      background 0.12s ease,
+      color 0.12s ease;
     margin-right: 2px;
   }
 
@@ -2366,7 +2909,10 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    transition:
+      opacity 0.12s ease,
+      background 0.12s ease,
+      color 0.12s ease;
     margin-right: 2px;
   }
 
@@ -2421,7 +2967,9 @@
     font-size: 11px;
     font-weight: 500;
     border: 1px solid var(--border);
-    transition: background 0.12s ease, border-color 0.12s ease;
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease;
   }
 
   .clear-filter-btn:hover {
@@ -2447,7 +2995,9 @@
     border-radius: 8px;
     color: var(--muted);
     font-size: 12px;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease;
   }
 
   .new-tab-btn:hover {
@@ -2480,7 +3030,11 @@
   .stat-card {
     text-align: center;
     padding: 16px;
-    background: radial-gradient(circle at 50% 20%, var(--accent-soft) 0%, var(--surface) 80%);
+    background: radial-gradient(
+      circle at 50% 20%,
+      var(--accent-soft) 0%,
+      var(--surface) 80%
+    );
   }
 
   .stat-big {
@@ -2604,7 +3158,9 @@
     font-size: 11.5px;
     color: var(--text);
     background: var(--surface);
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
   }
 
   .choice-btn.selected {
@@ -2630,7 +3186,9 @@
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .accent-dot:hover {
@@ -2712,7 +3270,11 @@
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+    background: linear-gradient(
+      135deg,
+      var(--accent),
+      color-mix(in srgb, var(--accent) 55%, #000)
+    );
     color: #ffffff;
     font-weight: 700;
     font-size: 13px;
@@ -2871,7 +3433,6 @@
     filter: brightness(1.1);
   }
 
-
   .danger-btn {
     padding: 4px 8px;
     border-radius: 5px;
@@ -3000,8 +3561,6 @@
     color: #f59e0b;
   }
 
-
-
   .empty-card {
     text-align: center;
     padding: 20px;
@@ -3124,22 +3683,23 @@
     border-radius: 9999px;
     font-size: 11px;
     color: var(--muted);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
     flex-shrink: 0;
     transition: all 0.14s ease;
   }
 
   .space-filter-pill:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--hover);
     color: var(--text);
   }
 
   .space-filter-pill.active {
-    background: var(--hover);
+    background: var(--surface);
     color: var(--text);
-    border-color: rgba(255, 255, 255, 0.18);
-    font-weight: 500;
+    border-color: var(--border);
+    box-shadow: var(--shadow-sm);
+    font-weight: 550;
   }
 
   .sp-dot {
@@ -3370,18 +3930,194 @@
     font-size: 11px;
     font-weight: 500;
     color: var(--text);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     transition: all 0.12s ease;
   }
 
   .scratch-action-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--hover);
   }
 
   .scratch-action-btn.danger:hover {
     color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.3);
+    border-color: #ef4444;
+  }
+
+  /* GitHub Star Card in About Section */
+  .about-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 16px 0 18px;
+    text-align: center;
+  }
+
+  .about-logo {
+    width: 48px;
+    height: 48px;
+    display: block;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
+  }
+
+  .about-name {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .about-tagline {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  .github-star-card {
+    background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--accent) 6%, var(--surface)));
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .github-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .github-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .github-icon {
+    color: var(--text);
+  }
+
+  .github-title {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--text);
+  }
+
+  .github-stars-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: #eab308;
+    background: rgba(234, 179, 8, 0.14);
+    border: 1px solid rgba(234, 179, 8, 0.28);
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+
+  .github-card-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 0 12px;
+  }
+
+  .github-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .btn-star-repo {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px var(--accent-glow);
+    transition: all 0.16s ease;
+    box-sizing: border-box;
+  }
+
+  .btn-star-repo:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px var(--accent-glow);
+  }
+
+  .star-sparkle {
+    font-size: 13px;
+  }
+
+  .out-arrow {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+
+  .btn-repo-issues {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.14s ease;
+    box-sizing: border-box;
+  }
+
+  .btn-repo-issues:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .repo-inline-link {
+    all: unset;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 11.5px;
+    font-weight: 550;
+    transition: text-decoration 0.12s ease;
+  }
+
+  .repo-inline-link:hover {
+    text-decoration: underline;
+  }
+
+  .footer-dot {
+    color: var(--border);
+    font-size: 9px;
+  }
+
+  .footer-gh-link {
+    all: unset;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 550;
+    color: var(--muted);
+    transition: color 0.14s ease;
+  }
+
+  .footer-gh-link:hover {
+    color: var(--accent);
   }
 
   .scratchpad-body {
@@ -3400,7 +4136,8 @@
     min-height: 380px;
     background: transparent;
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      sans-serif;
     font-size: 13px;
     line-height: 1.6;
     resize: none;
