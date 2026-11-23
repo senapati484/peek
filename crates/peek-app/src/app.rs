@@ -28,7 +28,7 @@ use crate::assets::{PageAssets, UiAssets};
 use crate::inject;
 
 pub const BAR_HEIGHT: f64 = 42.0;
-pub const BAR_HEIGHT_FULLSCREEN: f64 = 52.0;
+pub const BAR_HEIGHT_FULLSCREEN: f64 = 50.0;
 
 pub fn default_user_agent() -> &'static str {
     #[cfg(target_os = "windows")]
@@ -866,24 +866,6 @@ impl App {
                     },
                 });
             }
-            Command::ToggleFullscreen => {
-                let current_fs = self.is_window_fullscreen();
-                if current_fs {
-                    self.window.set_fullscreen(None);
-                } else {
-                    self.window.set_fullscreen(Some(tao::window::Fullscreen::Borderless(None)));
-                }
-                self.layout();
-                let next_fs = self.is_window_fullscreen();
-                self.send(Event::FullscreenState { active: next_fs });
-                self.send(Event::Toast {
-                    message: if next_fs {
-                        "Fullscreen mode enabled (⌘⇧F)".into()
-                    } else {
-                        "Fullscreen mode disabled".into()
-                    },
-                });
-            }
             Command::ToggleInvertDark => {
                 if let Some(view) = self.active_view() {
                     let _ = self.engine.evaluate(
@@ -1178,7 +1160,6 @@ impl App {
                 }
             }
             Shortcut::ToggleZenMode => self.handle_command(Command::ToggleZenMode),
-            Shortcut::ToggleFullscreen => self.handle_command(Command::ToggleFullscreen),
             Shortcut::ToggleInvertDark => self.handle_command(Command::ToggleInvertDark),
             Shortcut::TogglePiP => self.handle_command(Command::TogglePiP),
             Shortcut::ZoomIn => self.handle_command(Command::ZoomIn),
@@ -1690,33 +1671,11 @@ impl App {
         }
         self.hide_preview();
         self.ensure_layer_order();
-        let is_fs = self.is_window_fullscreen();
-        self.send(Event::FullscreenState { active: is_fs });
         if is_blank {
             if let Some(id) = self.ui_id {
                 let _ = self.engine.focus(id);
             }
         }
-    }
-
-    pub fn is_window_fullscreen(&self) -> bool {
-        if self.window.fullscreen().is_some() {
-            return true;
-        }
-        #[cfg(target_os = "macos")]
-        {
-            use objc2::msg_send;
-            use tao::platform::macos::WindowExtMacOS;
-            let ns_win = self.window.ns_window() as *mut objc2::runtime::AnyObject;
-            if !ns_win.is_null() {
-                let mask: usize = unsafe { msg_send![ns_win, styleMask] };
-                const NS_WINDOW_STYLE_MASK_FULL_SCREEN: usize = 1 << 14;
-                if (mask & NS_WINDOW_STYLE_MASK_FULL_SCREEN) != 0 {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     fn is_active_blank(&self) -> bool {
@@ -1727,7 +1686,7 @@ impl App {
     }
 
     pub fn bar_height(&self) -> f64 {
-        if self.is_window_fullscreen() {
+        if self.window.fullscreen().is_some() {
             BAR_HEIGHT_FULLSCREEN
         } else {
             BAR_HEIGHT
@@ -1743,7 +1702,7 @@ impl App {
             let height = if self.omnibar_open {
                 bar_h + OMNIBAR_PANEL_HEIGHT
             } else {
-                0.0
+                bar_h
             };
             Bounds::new(0.0, 0.0, w, height)
         } else {
@@ -2111,9 +2070,6 @@ impl App {
             active: self.tabs.active_id(),
         });
         self.sync_active_tab_state();
-        self.send(Event::FullscreenState {
-            active: self.is_window_fullscreen(),
-        });
         self.send(Event::ZenModeState {
             active: self.is_zen_mode,
         });

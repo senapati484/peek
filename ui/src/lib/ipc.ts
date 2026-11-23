@@ -112,7 +112,6 @@ export type PeekEvent =
   | { type: 'findState'; open: boolean; query: string; count: number; index: number }
   | { type: 'readerModeState'; active: boolean }
   | { type: 'zenModeState'; active: boolean }
-  | { type: 'fullscreenState'; active: boolean }
   | { type: 'invertDarkState'; active: boolean }
   | { type: 'noteLoaded'; content: string }
   | { type: 'zoomLevel'; percent: number }
@@ -167,7 +166,6 @@ export type PeekCommand =
   | { type: 'getBookmarks'; query?: string }
   | { type: 'toggleBookmark'; url: string; title: string }
   | { type: 'toggleZenMode' }
-  | { type: 'toggleFullscreen' }
   | { type: 'toggleInvertDark' }
   | { type: 'togglePiP' }
   | { type: 'zoomIn' }

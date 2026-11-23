@@ -42,7 +42,6 @@
   let activeProfile = $state('default');
 
   let isZenMode = $state(false);
-  let isFullscreen = $state(false);
   let zenHovered = $state(false);
   let readerModeActive = $state(false);
   let invertDarkActive = $state(false);
@@ -154,8 +153,7 @@
     { kind: 'command', text: '> Open Settings', detail: '⌘⇧] • Manage settings & tools', url: null, tabId: null },
     { kind: 'command', text: '> Smart Night Mode', detail: '⌘⇧D • Soft high-contrast dark theme', url: null, tabId: null },
     { kind: 'command', text: '> Toggle Reader Mode', detail: '⌘⇧R • Clean distraction-free view', url: null, tabId: null },
-    { kind: 'command', text: '> Toggle Fullscreen', detail: '⌘⇧F • Fullscreen window', url: null, tabId: null },
-    { kind: 'command', text: '> Zen Mode (Ghost Canvas)', detail: '⌘. • Clean edge-to-edge canvas', url: null, tabId: null },
+    { kind: 'command', text: '> Zen Mode (Ghost Canvas)', detail: '⌘⇧F • Fullscreen edge-to-edge', url: null, tabId: null },
     { kind: 'command', text: '> Copy Clean URL', detail: '⌘⇧C • Strip tracking params', url: null, tabId: null },
     { kind: 'command', text: '> Copy Markdown Link', detail: '⌘⌥C • Copy as [Title](URL)', url: null, tabId: null },
     { kind: 'command', text: '> Open Profiles', detail: 'Manage isolated browsing profiles', url: null, tabId: null },
@@ -177,7 +175,6 @@
       case '> Open Settings': send({ type: 'setDrawer', open: true, side: 'right', section: 'general' }); break;
       case '> Smart Night Mode': send({ type: 'toggleInvertDark' }); break;
       case '> Toggle Reader Mode': send({ type: 'toggleReaderMode' }); break;
-      case '> Toggle Fullscreen': send({ type: 'toggleFullscreen' }); break;
       case '> Zen Mode (Ghost Canvas)': send({ type: 'toggleZenMode' }); break;
       case '> Copy Clean URL': copyCleanLink(); break;
       case '> Copy Markdown Link': copyMarkdownLink(); break;
@@ -372,9 +369,6 @@
       case 'zenModeState':
         isZenMode = event.active;
         break;
-      case 'fullscreenState':
-        isFullscreen = event.active;
-        break;
       case 'readerModeState':
         readerModeActive = event.active;
         break;
@@ -463,11 +457,6 @@
           send({ type: 'toggleMuteTab' });
           return;
         }
-        if (key === 'f') {
-          e.preventDefault();
-          send({ type: 'toggleFullscreen' });
-          return;
-        }
         if (key === '[' || key === '{') {
           e.preventDefault();
           openDrawer('left', 'tabs');
@@ -529,7 +518,6 @@
     />
   {:else}
     <DockedTopBar
-      {isFullscreen}
       {isZenMode}
       bind:zenHovered
       bind:focused
