@@ -30,6 +30,8 @@
     onBarWheel: (e: WheelEvent) => void;
     onAcceptSuggestion: (item: Suggestion) => void;
     onTogglePin: () => void;
+    onCopyCleanUrl: () => void;
+    onCopyMarkdownLink: () => void;
     onOpenDrawer: (side: EdgeSide, section?: string) => void;
   }
 
@@ -60,6 +62,8 @@
     onBarWheel,
     onAcceptSuggestion,
     onTogglePin,
+    onCopyCleanUrl,
+    onCopyMarkdownLink,
     onOpenDrawer,
   }: Props = $props();
 
@@ -203,6 +207,74 @@
       </button>
     {/if}
 
+    <!-- Pin Website Button -->
+    <button
+      class="tool-btn pin-btn"
+      class:pinned={isCurrentUrlPinned}
+      title={isCurrentUrlPinned ? 'Unpin Website' : 'Pin Website'}
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        onTogglePin();
+      }}
+      aria-label="Pin or Unpin Website"
+    >
+      <svg viewBox="0 0 16 16" fill={isCurrentUrlPinned ? 'currentColor' : 'none'} stroke="currentColor" class="tool-icon pin-icon">
+        <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+
+    <!-- Copy Clean URL Button (Strips tracking parameters) -->
+    <button
+      class="tool-btn copy-clean-btn"
+      title="Copy Clean URL (⌘⇧C)"
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        onCopyCleanUrl();
+      }}
+      aria-label="Copy Clean URL"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+        <path d="M6.5 9.5a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-1 1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9.5 6.5a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l1-1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- Copy Markdown Link Button -->
+    <button
+      class="tool-btn copy-md-btn"
+      title="Copy Markdown Link (⌘⌥C)"
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        onCopyMarkdownLink();
+      }}
+      aria-label="Copy Markdown Link"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+        <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke-width="1.2"/>
+        <path d="M4 10V6l2 2.5L8 6v4M11.5 6v4M10 8.5l1.5 1.5 1.5-1.5" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- Picture-in-Picture Video -->
+    <button
+      class="tool-btn pip-btn"
+      title="Picture-in-Picture Video (⌘⇧P)"
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        send({ type: 'togglePiP' });
+      }}
+      aria-label="Picture-in-Picture Video"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+        <rect x="2" y="3" width="12" height="9" rx="1.5" stroke-width="1.2"/>
+        <rect x="8" y="7" width="5" height="4" rx="1" fill="currentColor" stroke-width="0.8"/>
+      </svg>
+    </button>
+
     <!-- Smart Night Mode Toggle (Calibrated Soft Dark Theme) -->
     <button
       class="tool-btn dark-mode-btn"
@@ -238,6 +310,40 @@
       </svg>
     </button>
 
+    <!-- Zen Mode / Ghost Canvas Button -->
+    <button
+      class="tool-btn zen-btn"
+      class:active-zen={isZenMode}
+      title={isZenMode ? 'Exit Zen Mode (⌘.)' : 'Zen Mode / Ghost Canvas (⌘.)'}
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        send({ type: 'toggleZenMode' });
+      }}
+      aria-label="Zen Mode"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+        <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- Adblock & Privacy Shield Button -->
+    <button
+      class="tool-btn shield-btn"
+      title="Adblock & Privacy Filters"
+      type="button"
+      onclick={(e) => {
+        e.stopPropagation();
+        onOpenDrawer('right', 'blocking');
+      }}
+      aria-label="Adblock and Privacy Filters"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon shield-icon">
+        <path d="M8 1.5L2.5 3.8v4.2c0 3.7 2.3 6.3 5.5 7 3.2-.7 5.5-3.3 5.5-7V3.8L8 1.5z" stroke-width="1.3" stroke-linejoin="round" />
+        <path d="M5.5 8l2 2 3.5-3.5" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+
     <!-- Audio Equalizer / Mute Button -->
     {#if activeAudible}
       <button
@@ -257,23 +363,6 @@
         </span>
       </button>
     {/if}
-
-    <!-- Pin Website Button -->
-    <button
-      class="tool-btn pin-btn"
-      class:pinned={isCurrentUrlPinned}
-      title={isCurrentUrlPinned ? 'Unpin Website' : 'Pin Website'}
-      type="button"
-      onclick={(e) => {
-        e.stopPropagation();
-        onTogglePin();
-      }}
-      aria-label="Pin or Unpin Website"
-    >
-      <svg viewBox="0 0 16 16" fill={isCurrentUrlPinned ? 'currentColor' : 'none'} stroke="currentColor" class="tool-icon pin-icon">
-        <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    </button>
 
     <!-- Profile Button (Always visible) -->
     <button
@@ -502,6 +591,26 @@
   .tool-btn.reader-btn.active-reader {
     color: #38bdf8;
     background: rgba(56, 189, 248, 0.16);
+  }
+
+  .zen-btn.active-zen {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .shield-btn:hover {
+    color: #10b981;
+  }
+
+  .shield-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .copy-clean-btn:hover,
+  .copy-md-btn:hover,
+  .pip-btn:hover {
+    color: var(--accent);
   }
 
   .audio-btn {

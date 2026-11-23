@@ -6,6 +6,7 @@
     onEvent,
     requestState,
     send,
+    stripTrackingParams,
     type EdgeSide,
     type PeekEvent,
     type PinnedSite,
@@ -15,6 +16,7 @@
   } from './ipc';
   import StartPage from './omnibar/StartPage.svelte';
   import DockedTopBar from './omnibar/DockedTopBar.svelte';
+  import { cleanDomain } from './utils';
 
   interface CommandItem {
     id: string;
@@ -47,6 +49,27 @@
 
   let toastMessage = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function copyCleanLink() {
+    if (!activeUrl || isBlank(activeUrl)) return;
+    const clean = stripTrackingParams(activeUrl);
+    try {
+      navigator.clipboard?.writeText(clean);
+    } catch {}
+    send({ type: 'copyCleanUrl', url: activeUrl });
+    showToast('Clean URL copied to clipboard');
+  }
+
+  function copyMarkdownLink() {
+    if (!activeUrl || isBlank(activeUrl)) return;
+    const title = activeTitle || cleanDomain(activeUrl);
+    const md = `[${title}](${activeUrl})`;
+    try {
+      navigator.clipboard?.writeText(md);
+    } catch {}
+    send({ type: 'copyMarkdownLink' });
+    showToast('Markdown link copied to clipboard');
+  }
 
   let tabsList = $state<TabInfo[]>([]);
   let showTabCyclingHud = $state(false);
@@ -153,10 +176,8 @@
       case '> Smart Night Mode': send({ type: 'toggleInvertDark' }); break;
       case '> Toggle Reader Mode': send({ type: 'toggleReaderMode' }); break;
       case '> Zen Mode (Ghost Canvas)': send({ type: 'toggleZenMode' }); break;
-      case '> Copy Clean URL':
-        if (activeUrl) send({ type: 'copyCleanUrl', url: activeUrl });
-        break;
-      case '> Copy Markdown Link': send({ type: 'copyMarkdownLink' }); break;
+      case '> Copy Clean URL': copyCleanLink(); break;
+      case '> Copy Markdown Link': copyMarkdownLink(); break;
       case '> Open Profiles': send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' }); break;
       case '> Open History': send({ type: 'setDrawer', open: true, side: 'left', section: 'history' }); break;
       case '> Open Bookmarks': send({ type: 'setDrawer', open: true, side: 'left', section: 'bookmarks' }); break;
@@ -377,19 +398,83 @@
     send({ type: 'getPinnedSites' });
 
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
-        e.preventDefault();
-        focused = true;
-        send({ type: 'setOmnibarOpen', open: true });
-        inputEl?.focus();
-        inputEl?.select();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        focused = true;
-        send({ type: 'setOmnibarOpen', open: true });
-        input = '>';
-        onInput();
-        inputEl?.focus();
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      if (mod && !e.shiftKey && !e.altKey) {
+        if (key === 'l') {
+          e.preventDefault();
+          focused = true;
+          send({ type: 'setOmnibarOpen', open: true });
+          inputEl?.focus();
+          inputEl?.select();
+          return;
+        }
+        if (key === 'k') {
+          e.preventDefault();
+          focused = true;
+          send({ type: 'setOmnibarOpen', open: true });
+          input = '>';
+          onInput();
+          inputEl?.focus();
+          return;
+        }
+        if (key === 'r') {
+          e.preventDefault();
+          send({ type: 'reload' });
+          return;
+        }
+        if (key === '.') {
+          e.preventDefault();
+          send({ type: 'toggleZenMode' });
+          return;
+        }
+      }
+
+      if (mod && e.shiftKey && !e.altKey) {
+        if (key === 'c') {
+          e.preventDefault();
+          copyCleanLink();
+          return;
+        }
+        if (key === 'p') {
+          e.preventDefault();
+          send({ type: 'togglePiP' });
+          return;
+        }
+        if (key === 'd') {
+          e.preventDefault();
+          send({ type: 'toggleInvertDark' });
+          return;
+        }
+        if (key === 'r') {
+          e.preventDefault();
+          send({ type: 'toggleReaderMode' });
+          return;
+        }
+        if (key === 'm') {
+          e.preventDefault();
+          send({ type: 'toggleMuteTab' });
+          return;
+        }
+        if (key === '[' || key === '{') {
+          e.preventDefault();
+          openDrawer('left', 'tabs');
+          return;
+        }
+        if (key === ']' || key === '}') {
+          e.preventDefault();
+          openDrawer('right', 'general');
+          return;
+        }
+      }
+
+      if (mod && e.altKey && !e.shiftKey) {
+        if (key === 'c') {
+          e.preventDefault();
+          copyMarkdownLink();
+          return;
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -462,6 +547,8 @@
       {onBarWheel}
       onAcceptSuggestion={accept}
       onTogglePin={togglePinCurrent}
+      onCopyCleanUrl={copyCleanLink}
+      onCopyMarkdownLink={copyMarkdownLink}
       onOpenDrawer={openDrawer}
     />
   {/if}
