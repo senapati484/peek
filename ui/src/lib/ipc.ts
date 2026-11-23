@@ -29,7 +29,22 @@ export type PinnedSite = {
   position: number;
 };
 
-export type SuggestionKind = 'history' | 'tab' | 'bookmark' | 'search';
+export type HistoryItem = {
+  url: string;
+  title: string;
+  visitCount: number;
+  lastVisit: number;
+};
+
+export type BookmarkItem = {
+  id: number;
+  url: string;
+  title: string;
+  favicon: string | null;
+  createdAt: number;
+};
+
+export type SuggestionKind = 'history' | 'tab' | 'bookmark' | 'search' | 'command';
 
 export type Suggestion = {
   kind: SuggestionKind;
@@ -71,7 +86,11 @@ export type PeekEvent =
       searchEngine: string;
     }
   | { type: 'pinnedSitesChanged'; sites: PinnedSite[] }
-  | { type: 'toast'; message: string };
+  | { type: 'toast'; message: string }
+  | { type: 'historyList'; entries: HistoryItem[] }
+  | { type: 'bookmarksList'; bookmarks: BookmarkItem[] }
+  | { type: 'findState'; open: boolean; query: string; count: number; index: number }
+  | { type: 'readerModeState'; active: boolean };
 
 export type PeekCommand =
   | { type: 'navigate'; input: string }
@@ -110,6 +129,16 @@ export type PeekCommand =
   | { type: 'getCookies' }
   | { type: 'previewLink'; url: string; x: number; y: number; width: number; height: number }
   | { type: 'hidePreview' }
+  | { type: 'copyCleanUrl'; url: string }
+  | { type: 'toggleMuteTab'; id?: number }
+  | { type: 'toggleReaderMode' }
+  | { type: 'findInPage'; query: string; forward: boolean }
+  | { type: 'closeFind' }
+  | { type: 'getHistory'; query?: string }
+  | { type: 'deleteHistoryItem'; url: string }
+  | { type: 'clearHistory' }
+  | { type: 'getBookmarks'; query?: string }
+  | { type: 'toggleBookmark'; url: string; title: string }
   | { type: 'quit' };
 
 type Bridge = {
@@ -159,5 +188,43 @@ export function hostOf(url: string): string | null {
     return new URL(url).hostname;
   } catch {
     return null;
+  }
+}
+
+const TRACKING_PREFIXES = [
+  'utm_',
+  'fbclid',
+  'gclid',
+  'gclsrc',
+  'dclid',
+  'si',
+  'igshid',
+  'mc_',
+  'yclid',
+  '_hs',
+  'ref_',
+];
+
+const TRACKING_KEYS = new Set(['ref', 's', 't', 'feature', 'source']);
+
+export function stripTrackingParams(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    const toDelete: string[] = [];
+    parsed.searchParams.forEach((_, key) => {
+      const lower = key.toLowerCase();
+      if (
+        TRACKING_PREFIXES.some((p) => lower.startsWith(p)) ||
+        TRACKING_KEYS.has(lower)
+      ) {
+        toDelete.push(key);
+      }
+    });
+    for (const key of toDelete) {
+      parsed.searchParams.delete(key);
+    }
+    return parsed.toString();
+  } catch {
+    return rawUrl;
   }
 }

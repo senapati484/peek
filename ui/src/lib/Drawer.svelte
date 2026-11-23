@@ -1,16 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    displayUrl,
+    isBlank,
     onEvent,
     requestState,
     send,
+    type BookmarkItem,
     type EdgeSide,
     type ExtensionSummary,
+    type HistoryItem,
     type PeekEvent,
     type TabInfo,
   } from './ipc';
 
-  type Section = 'tabs' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
+  type Section = 'tabs' | 'history' | 'bookmarks' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
 
   function getInitialParams() {
     const rawHash = window.location.hash.replace('#', '');
@@ -19,7 +23,7 @@
     const sideParam = params.get('side')?.toLowerCase();
     const sectionParam = params.get('section')?.toLowerCase();
     const validSections: Section[] = [
-      'tabs', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
+      'tabs', 'history', 'bookmarks', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
     ];
 
     let resolvedSection: Section = sideParam === 'right' ? 'general' : 'tabs';
@@ -124,6 +128,63 @@
 
   let pinnedTabs = $derived(filteredTabs.filter((t) => t.pinned));
   let regularTabs = $derived(filteredTabs.filter((t) => !t.pinned));
+
+  // History and Bookmarks State
+  let historyEntries = $state<HistoryItem[]>([]);
+  let bookmarksList = $state<BookmarkItem[]>([]);
+
+  let filteredHistory = $derived(
+    filterText.trim()
+      ? historyEntries.filter((h) =>
+          (h.title || h.url).toLowerCase().includes(filterText.toLowerCase())
+        )
+      : historyEntries
+  );
+
+  let filteredBookmarks = $derived(
+    filterText.trim()
+      ? bookmarksList.filter((b) =>
+          (b.title || b.url).toLowerCase().includes(filterText.toLowerCase())
+        )
+      : bookmarksList
+  );
+
+  function formatRelativeTime(ts: number): string {
+    if (!ts) return '';
+    const ms = ts > 10000000000 ? ts : ts * 1000;
+    const diff = Date.now() - ms;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    const days = Math.floor(diff / 86400000);
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days}d ago`;
+    return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function cleanDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+    }
+  }
+
+  let activeTab = $derived(tabs.find((t) => t.id === activeTabId));
+  let isCurrentTabBookmarked = $derived(
+    activeTab && !isBlank(activeTab.url)
+      ? bookmarksList.some((b) => b.url === activeTab?.url)
+      : false
+  );
+
+  function toggleCurrentBookmark(): void {
+    if (!activeTab || isBlank(activeTab.url)) return;
+    send({
+      type: 'toggleBookmark',
+      url: activeTab.url,
+      title: activeTab.title || displayUrl(activeTab.url),
+    });
+  }
 
   function close(): void {
     send({ type: 'setDrawer', open: false });
@@ -243,8 +304,10 @@
           if (event.side) {
             currentSide = event.side;
             if (event.side === 'left') {
-              section = 'tabs';
-            } else if (section === 'tabs') {
+              if (section !== 'tabs' && section !== 'history' && section !== 'bookmarks') {
+                section = 'tabs';
+              }
+            } else if (section === 'tabs' || section === 'history' || section === 'bookmarks') {
               section = 'general';
             }
           }
@@ -253,9 +316,22 @@
               section = 'general';
             } else {
               section = event.section as Section;
+              if (section === 'history') {
+                currentSide = 'left';
+                send({ type: 'getHistory' });
+              } else if (section === 'bookmarks') {
+                currentSide = 'left';
+                send({ type: 'getBookmarks' });
+              }
             }
           }
         }
+        break;
+      case 'historyList':
+        historyEntries = event.entries;
+        break;
+      case 'bookmarksList':
+        bookmarksList = event.bookmarks;
         break;
       case 'cookiesCount':
         cookiesCount = event.count;
@@ -293,6 +369,8 @@
 
     onEvent(handleEvent);
     requestState();
+    send({ type: 'getHistory' });
+    send({ type: 'getBookmarks' });
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -380,19 +458,45 @@
     aria-label="Peek drawer"
   >
   {#if currentSide === 'left'}
-    <!-- Left Drawer: Dedicated Vertical Tabs -->
+    <!-- Left Drawer: Dedicated Vertical Tabs, History, and Bookmarks -->
     <header class="tabs-header">
       <div class="tabs-brand">
         <img src="/logo.png" alt="Peek" class="drawer-logo" />
-        <span class="drawer-title">Tabs</span>
-        <span class="tab-count-badge">{tabs.length}</span>
+        <nav class="left-nav-pills" aria-label="Views">
+          <button
+            class="left-pill"
+            class:active={section === 'tabs'}
+            onclick={() => { section = 'tabs'; filterText = ''; }}
+            type="button"
+          >
+            Tabs <span class="tab-count-badge">{tabs.length}</span>
+          </button>
+          <button
+            class="left-pill"
+            class:active={section === 'history'}
+            onclick={() => { section = 'history'; filterText = ''; send({ type: 'getHistory' }); }}
+            type="button"
+          >
+            History
+          </button>
+          <button
+            class="left-pill"
+            class:active={section === 'bookmarks'}
+            onclick={() => { section = 'bookmarks'; filterText = ''; send({ type: 'getBookmarks' }); }}
+            type="button"
+          >
+            Saved
+          </button>
+        </nav>
       </div>
-      <button class="icon-close-btn" onclick={close} title="Close tabs (Esc)">
+      <button class="icon-close-btn" onclick={close} title="Close drawer (Esc)">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="close-icon">
           <path d="M4 4l8 8M12 4l-8 8" stroke-width="1.6" stroke-linecap="round"/>
         </svg>
       </button>
     </header>
+
+    {#if section === 'tabs'}
 
     <div class="filter-wrap">
       <div class="filter-box">
@@ -466,7 +570,7 @@
                 {/if}
                 <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
                 {#if tab.audible}
-                  <span class="pill audio" title="Audible tab">
+                  <span class="pill audio" title="Playing audio">
                     <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
                       <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
                     </svg>
@@ -474,6 +578,21 @@
                   </span>
                 {/if}
               </button>
+              {#if tab.audible}
+                <button
+                  class="tab-audio-btn"
+                  title="Mute / Unmute tab audio"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    send({ type: 'toggleMuteTab', id: tab.id });
+                  }}
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="tab-audio-icon">
+                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
+                  </svg>
+                </button>
+              {/if}
               <button
                 class="tab-pin-btn is-pinned"
                 title="Unpin tab"
@@ -537,7 +656,7 @@
                 {/if}
                 <span class="title">{tab.title || (tab.url === 'about:blank' ? 'New Tab' : tab.url) || 'New Tab'}</span>
                 {#if tab.audible}
-                  <span class="pill audio" title="Audible tab">
+                  <span class="pill audio" title="Playing audio">
                     <svg viewBox="0 0 16 16" fill="currentColor" class="pill-icon">
                       <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
                     </svg>
@@ -550,6 +669,21 @@
                   </span>
                 {/if}
               </button>
+              {#if tab.audible}
+                <button
+                  class="tab-audio-btn"
+                  title="Mute / Unmute tab audio"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    send({ type: 'toggleMuteTab', id: tab.id });
+                  }}
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="tab-audio-icon">
+                    <path d="M11.559 1.44a.75.75 0 0 1 .441.682v11.756a.75.75 0 0 1-1.28.53l-3.97-3.97H4.25a1.75 1.75 0 0 1-1.75-1.75V7.318c0-.966.784-1.75 1.75-1.75h2.5l3.97-3.97a.75.75 0 0 1 .839-.158z" />
+                  </svg>
+                </button>
+              {/if}
               <button
                 class="tab-pin-btn"
                 title="Pin tab"
@@ -607,6 +741,174 @@
         <span class="plus">+</span> New Tab <kbd>⌘ T</kbd>
       </button>
     </footer>
+
+    {:else if section === 'history'}
+      <div class="filter-wrap">
+        <div class="filter-box">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
+            <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+            <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search browsing history..."
+            bind:value={filterText}
+            class="filter-input"
+          />
+          {#if filterText}
+            <button class="clear-filter" onclick={() => filterText = ''}>×</button>
+          {/if}
+        </div>
+      </div>
+
+      <div class="body history-body">
+        {#if filteredHistory.length === 0}
+          <div class="empty-state">
+            <span class="empty-icon">📜</span>
+            <span class="empty-text">
+              {filterText ? `No history matching "${filterText}"` : 'No browsing history yet'}
+            </span>
+          </div>
+        {:else}
+          <ul class="history-list">
+            {#each filteredHistory as item (item.url + ':' + item.lastVisit)}
+              <li class="history-item">
+                <button
+                  class="history-row"
+                  type="button"
+                  onclick={() => { send({ type: 'navigate', input: item.url }); close(); }}
+                  title={`${item.title || item.url}\n${item.url}`}
+                >
+                  <span class="favicon-initial">{domainInitial(item.url)}</span>
+                  <div class="history-info">
+                    <span class="history-title">{item.title || displayUrl(item.url)}</span>
+                    <div class="history-sub">
+                      <span class="history-host">{cleanDomain(item.url)}</span>
+                      {#if item.lastVisit}
+                        <span class="history-dot">·</span>
+                        <span class="history-time">{formatRelativeTime(item.lastVisit)}</span>
+                      {/if}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  class="history-delete-btn"
+                  title="Remove from history"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    send({ type: 'deleteHistoryItem', url: item.url });
+                    historyEntries = historyEntries.filter((h) => h.url !== item.url);
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      <footer class="tabs-footer history-footer">
+        <button
+          class="clear-history-btn"
+          type="button"
+          onclick={() => {
+            if (confirm('Clear all browsing history?')) {
+              send({ type: 'clearHistory' });
+              historyEntries = [];
+            }
+          }}
+        >
+          Clear Browsing History
+        </button>
+      </footer>
+
+    {:else if section === 'bookmarks'}
+      <div class="filter-wrap">
+        <div class="filter-box">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="filter-icon">
+            <circle cx="7" cy="7" r="4.5" stroke-width="1.6" />
+            <path d="M10.5 10.5L14 14" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search saved bookmarks..."
+            bind:value={filterText}
+            class="filter-input"
+          />
+          {#if filterText}
+            <button class="clear-filter" onclick={() => filterText = ''}>×</button>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Quick Bookmark Active Tab Action -->
+      {#if activeTab && !isBlank(activeTab.url)}
+        <div class="bookmark-action-bar">
+          <button
+            class="bookmark-toggle-btn"
+            class:is-saved={isCurrentTabBookmarked}
+            type="button"
+            onclick={toggleCurrentBookmark}
+          >
+            <span class="star-icon">{isCurrentTabBookmarked ? '★' : '☆'}</span>
+            <span>{isCurrentTabBookmarked ? 'Remove Current Tab from Saved' : 'Bookmark Current Tab'}</span>
+          </button>
+        </div>
+      {/if}
+
+      <div class="body bookmarks-body">
+        {#if filteredBookmarks.length === 0}
+          <div class="empty-state">
+            <span class="empty-icon">★</span>
+            <span class="empty-text">
+              {filterText ? `No bookmarks matching "${filterText}"` : 'No saved bookmarks yet'}
+            </span>
+          </div>
+        {:else}
+          <ul class="bookmarks-list">
+            {#each filteredBookmarks as b (b.id)}
+              <li class="bookmark-item">
+                <button
+                  class="bookmark-row"
+                  type="button"
+                  onclick={() => { send({ type: 'navigate', input: b.url }); close(); }}
+                  title={`${b.title || b.url}\n${b.url}`}
+                >
+                  {#if b.favicon}
+                    <img
+                      src={b.favicon}
+                      alt=""
+                      class="favicon"
+                      onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                    />
+                  {:else}
+                    <span class="favicon-initial">{domainInitial(b.url)}</span>
+                  {/if}
+                  <div class="bookmark-info">
+                    <span class="bookmark-title">{b.title || displayUrl(b.url)}</span>
+                    <span class="bookmark-host">{cleanDomain(b.url)}</span>
+                  </div>
+                </button>
+                <button
+                  class="bookmark-remove-btn"
+                  title="Remove bookmark"
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    send({ type: 'toggleBookmark', url: b.url, title: b.title });
+                    bookmarksList = bookmarksList.filter((x) => x.id !== b.id);
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
 
   {:else}
     <!-- Right Drawer: Settings, Profiles, Adblock, Hover Preview, Extensions -->
@@ -1175,6 +1477,47 @@
     gap: 8px;
   }
 
+  .left-nav-pills {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+  }
+
+  .left-pill {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 550;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.14s ease;
+  }
+
+  .left-pill:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+
+  .left-pill.active {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    font-weight: 600;
+  }
+
+  .left-pill .tab-count-badge {
+    font-size: 9.5px;
+    padding: 0 5px;
+  }
+
   .drawer-logo {
     width: 20px;
     height: 20px;
@@ -1495,8 +1838,213 @@
   }
 
   .pill.audio {
+    all: unset;
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     background: color-mix(in srgb, var(--accent) 25%, transparent);
     color: var(--accent);
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+
+  .tab-audio-btn {
+    all: unset;
+    flex: 0 0 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s ease;
+    margin-right: 2px;
+  }
+
+  .tab-audio-btn:hover {
+    background: var(--hover);
+    transform: scale(1.1);
+  }
+
+  .tab-audio-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* History & Bookmarks Views */
+  .history-body,
+  .bookmarks-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .history-list,
+  .bookmarks-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .history-item,
+  .bookmark-item {
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    transition: background 0.12s ease;
+    position: relative;
+  }
+
+  .history-item:hover,
+  .bookmark-item:hover {
+    background: var(--hover);
+  }
+
+  .history-row,
+  .bookmark-row {
+    all: unset;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+
+  .history-info,
+  .bookmark-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .history-title,
+  .bookmark-title {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .history-host,
+  .bookmark-host {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-dot {
+    opacity: 0.5;
+  }
+
+  .history-time {
+    color: var(--muted);
+    font-size: 10.5px;
+    flex-shrink: 0;
+  }
+
+  .history-delete-btn,
+  .bookmark-remove-btn {
+    all: unset;
+    opacity: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    margin-right: 6px;
+    transition: all 0.14s ease;
+  }
+
+  .history-item:hover .history-delete-btn,
+  .bookmark-item:hover .bookmark-remove-btn {
+    opacity: 1;
+  }
+
+  .history-delete-btn:hover,
+  .bookmark-remove-btn:hover {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  .clear-history-btn {
+    all: unset;
+    width: 100%;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #ef4444;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+
+  .clear-history-btn:hover {
+    background: rgba(239, 68, 68, 0.12);
+  }
+
+  .bookmark-action-bar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .bookmark-toggle-btn {
+    all: unset;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .bookmark-toggle-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .bookmark-toggle-btn.is-saved {
+    color: #a855f7;
+    border-color: rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.1);
   }
 
   .pill.sleep {

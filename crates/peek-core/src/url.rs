@@ -100,6 +100,39 @@ pub fn blank_page() -> &'static str {
     "peek://localhost/blank.html"
 }
 
+/// Strip known tracking query parameters (e.g. `utm_*`, `fbclid`, `gclid`, `si`, `igshid`, `ref`).
+pub fn strip_tracking_params(raw_url: &str) -> String {
+    if let Ok(mut parsed) = url::Url::parse(raw_url) {
+        let tracking_prefixes = [
+            "utm_", "fbclid", "gclid", "gclsrc", "dclid", "si", "igshid", "mc_", "yclid", "_hs", "ref_",
+        ];
+        let exact_keys = ["ref", "s", "t", "feature"];
+
+        let filtered: Vec<(String, String)> = parsed
+            .query_pairs()
+            .filter(|(k, _)| {
+                let lower = k.to_lowercase();
+                !exact_keys.contains(&lower.as_str())
+                    && !tracking_prefixes.iter().any(|prefix| lower.starts_with(prefix))
+            })
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+
+        if filtered.is_empty() {
+            parsed.set_query(None);
+        } else {
+            let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+            for (k, v) in filtered {
+                serializer.append_pair(&k, &v);
+            }
+            parsed.set_query(Some(&serializer.finish()));
+        }
+        parsed.to_string()
+    } else {
+        raw_url.to_string()
+    }
+}
+
 pub fn is_blank(url: &str) -> bool {
     let u = url.trim();
     u.is_empty() || u == "about:blank" || u == blank_page() || u.ends_with("/blank.html")
@@ -257,5 +290,15 @@ mod tests {
             resolve_input("alpha", &manager.tabs(), true),
             NavigateTarget::SwitchToTab(1)
         );
+    }
+
+    #[test]
+    fn test_strip_tracking_params() {
+        let dirty = "https://youtube.com/watch?v=123&si=trackingId&utm_source=twitter";
+        let clean = strip_tracking_params(dirty);
+        assert_eq!(clean, "https://youtube.com/watch?v=123");
+
+        let clean_already = "https://example.com/page?id=42";
+        assert_eq!(strip_tracking_params(clean_already), clean_already);
     }
 }

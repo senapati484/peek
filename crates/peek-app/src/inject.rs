@@ -213,6 +213,7 @@ const PAGE_SCRIPT: &str = r##"
       if (key === "w") { ev.preventDefault(); send({ type: "shortcut", shortcut: "closeTab" }); return; }
       if (key === "r") { ev.preventDefault(); send({ type: "shortcut", shortcut: "reload" }); return; }
       if (key === "k") { ev.preventDefault(); send({ type: "shortcut", shortcut: "openCommandPalette" }); return; }
+      if (key === "f") { ev.preventDefault(); send({ type: "shortcut", shortcut: "findInPage" }); return; }
       if (/^[1-9]$/.test(key)) {
         ev.preventDefault();
         send({ type: "shortcut", shortcut: { selectTab: Number(key) } });
@@ -222,6 +223,9 @@ const PAGE_SCRIPT: &str = r##"
     if (mod && ev.shiftKey && !ev.altKey) {
       if (key === "[" || key === "{") { ev.preventDefault(); send({ type: "shortcut", shortcut: "openTabsDrawer" }); return; }
       if (key === "]" || key === "}") { ev.preventDefault(); send({ type: "shortcut", shortcut: "openSettingsDrawer" }); return; }
+      if (key === "c") { ev.preventDefault(); send({ type: "shortcut", shortcut: "copyCleanUrl" }); return; }
+      if (key === "m") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleMute" }); return; }
+      if (key === "r") { ev.preventDefault(); send({ type: "shortcut", shortcut: "toggleReaderMode" }); return; }
     }
     if (mod && key === "tab") {
       ev.preventDefault();
@@ -457,5 +461,188 @@ const PAGE_SCRIPT: &str = r##"
       }
     }
   }, { passive: true });
+
+  window.__peekFind = function (query, forward) {
+    if (!query) return;
+    try {
+      var found = window.find(query, false, !forward, true, false, false, false);
+      if (!found) {
+        window.find(query, false, !forward, true, false, true, false);
+      }
+    } catch (e) {}
+  };
+
+  window.__peekCloseFind = function () {
+    var box = document.getElementById("__peek_find_box__");
+    if (box) box.remove();
+    var style = document.getElementById("__peek_find_style__");
+    if (style) style.remove();
+  };
+
+  window.__peekShowFind = function () {
+    var existing = document.getElementById("__peek_find_box__");
+    if (existing) {
+      var inp = existing.querySelector("input");
+      if (inp) { inp.focus(); inp.select(); }
+      return;
+    }
+    var style = document.createElement("style");
+    style.id = "__peek_find_style__";
+    style.textContent = `
+      #__peek_find_box__ {
+        position: fixed;
+        top: 14px;
+        right: 18px;
+        z-index: 2147483646;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        background: rgba(18, 18, 20, 0.94);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #__peek_find_box__ input {
+        all: unset;
+        width: 170px;
+        color: #ffffff;
+        font-size: 13px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      #__peek_find_box__ input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+      }
+      #__peek_find_box__ button {
+        all: unset;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 12px;
+        padding: 4px 7px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.12s, color 0.12s;
+      }
+      #__peek_find_box__ button:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+      }
+    `;
+    document.documentElement.appendChild(style);
+
+    var box = document.createElement("div");
+    box.id = "__peek_find_box__";
+    box.innerHTML = `
+      <input type="text" placeholder="Find in page..." id="__peek_find_inp__" />
+      <button id="__peek_find_prev__" title="Previous (Shift+Enter)">▲</button>
+      <button id="__peek_find_next__" title="Next (Enter)">▼</button>
+      <button id="__peek_find_cls__" title="Close (Escape)">✕</button>
+    `;
+    document.documentElement.appendChild(box);
+
+    var inp = box.querySelector("#__peek_find_inp__");
+    var prev = box.querySelector("#__peek_find_prev__");
+    var next = box.querySelector("#__peek_find_next__");
+    var cls = box.querySelector("#__peek_find_cls__");
+
+    inp.focus();
+    inp.addEventListener("input", function () {
+      window.__peekFind(inp.value, true);
+    });
+    inp.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        window.__peekFind(inp.value, !ev.shiftKey);
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        window.__peekCloseFind();
+      }
+    });
+    prev.addEventListener("click", function () { window.__peekFind(inp.value, false); });
+    next.addEventListener("click", function () { window.__peekFind(inp.value, true); });
+    cls.addEventListener("click", window.__peekCloseFind);
+  };
+
+  window.__peekToggleMute = function () {
+    try {
+      var media = document.querySelectorAll("audio, video");
+      var anyUnmuted = false;
+      for (var i = 0; i < media.length; i++) {
+        if (!media[i].muted) { anyUnmuted = true; break; }
+      }
+      for (var j = 0; j < media.length; j++) {
+        media[j].muted = anyUnmuted;
+      }
+      return anyUnmuted;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  window.__peekToggleReader = function () {
+    try {
+      var existing = document.getElementById("__peek_reader_view__");
+      if (existing) {
+        existing.remove();
+        var st = document.getElementById("__peek_reader_style__");
+        if (st) st.remove();
+        return false;
+      }
+      var target = document.querySelector("article") || document.querySelector("main") || document.body;
+      var clone = target.cloneNode(true);
+      var bad = clone.querySelectorAll("nav, header, footer, script, style, noscript, iframe, .ads, [role='banner'], [role='navigation']");
+      for (var b = 0; b < bad.length; b++) bad[b].remove();
+      var words = (clone.innerText || "").trim().split(/\s+/).filter(Boolean).length;
+      var readMin = Math.max(1, Math.round(words / 220));
+
+      var style = document.createElement("style");
+      style.id = "__peek_reader_style__";
+      style.textContent = `
+        #__peek_reader_view__ {
+          position: fixed; inset: 0; z-index: 2147483647;
+          background: #111113; color: #e4e4e7;
+          overflow-y: auto; padding: 44px 20px 80px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, serif;
+          line-height: 1.8; font-size: 18px;
+        }
+        .__peek_reader_wrap { max-width: 680px; margin: 0 auto; }
+        .__peek_reader_header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 14px; margin-bottom: 28px; }
+        .__peek_reader_badge { background: rgba(59,130,246,0.18); color: #60a5fa; padding: 3px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+        .__peek_reader_meta { color: #a1a1aa; font-size: 12.5px; }
+        .__peek_reader_btn { all: unset; cursor: pointer; background: rgba(255,255,255,0.08); color: #fff; padding: 4px 12px; border-radius: 7px; font-size: 12px; }
+        .__peek_reader_btn:hover { background: rgba(255,255,255,0.16); }
+        .__peek_reader_title { font-size: 32px; font-weight: 700; line-height: 1.25; margin-bottom: 24px; color: #f4f4f5; }
+        .__peek_reader_content p { margin-bottom: 1.6em; }
+        .__peek_reader_content img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
+        .__peek_reader_content a { color: #60a5fa; text-decoration: underline; }
+      `;
+      document.documentElement.appendChild(style);
+
+      var container = document.createElement("div");
+      container.id = "__peek_reader_view__";
+      container.innerHTML = `
+        <div class="__peek_reader_wrap">
+          <div class="__peek_reader_header">
+            <span class="__peek_reader_badge">📖 Reader View</span>
+            <span class="__peek_reader_meta">${words} words • ~${readMin} min read</span>
+            <button class="__peek_reader_btn" onclick="window.__peekToggleReader()">✕ Exit</button>
+          </div>
+          <h1 class="__peek_reader_title">${document.title || ''}</h1>
+          <div class="__peek_reader_content">${clone.innerHTML}</div>
+        </div>
+      `;
+      document.documentElement.appendChild(container);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
 })();
 "##;

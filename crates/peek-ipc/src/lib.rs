@@ -171,6 +171,35 @@ pub enum Command {
     },
     /// Dismiss the link preview.
     HidePreview,
+    /// Copy URL stripped of tracking parameters.
+    CopyCleanUrl { url: String },
+    /// Toggle audio mute on active or specified tab.
+    ToggleMuteTab {
+        #[serde(default)]
+        id: Option<TabId>,
+    },
+    /// Toggle distraction-free reader mode on active tab.
+    ToggleReaderMode,
+    /// Find in page query.
+    FindInPage { query: String, forward: bool },
+    /// Close in-page find bar.
+    CloseFind,
+    /// Request browsing history.
+    GetHistory {
+        #[serde(default)]
+        query: Option<String>,
+    },
+    /// Delete a single history URL.
+    DeleteHistoryItem { url: String },
+    /// Clear all browsing history.
+    ClearHistory,
+    /// Request saved bookmarks.
+    GetBookmarks {
+        #[serde(default)]
+        query: Option<String>,
+    },
+    /// Toggle bookmark state for a URL.
+    ToggleBookmark { url: String, title: String },
     Quit,
 }
 
@@ -246,6 +275,40 @@ pub enum Event {
     PinnedSitesChanged {
         sites: Vec<PinnedSite>,
     },
+    HistoryList {
+        entries: Vec<HistoryItem>,
+    },
+    BookmarksList {
+        bookmarks: Vec<BookmarkItem>,
+    },
+    FindState {
+        open: bool,
+        query: String,
+        count: usize,
+        index: usize,
+    },
+    ReaderModeState {
+        active: bool,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryItem {
+    pub url: String,
+    pub title: String,
+    pub visit_count: i64,
+    pub last_visit: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkItem {
+    pub id: i64,
+    pub url: String,
+    pub title: String,
+    pub favicon: Option<String>,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -291,6 +354,7 @@ pub enum SuggestionKind {
     Tab,
     Bookmark,
     Search,
+    Command,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -372,6 +436,10 @@ pub enum Shortcut {
     OpenTabsDrawer,
     OpenSettingsDrawer,
     OpenCommandPalette,
+    CopyCleanUrl,
+    FindInPage,
+    ToggleReaderMode,
+    ToggleMute,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

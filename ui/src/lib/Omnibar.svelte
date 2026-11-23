@@ -6,6 +6,7 @@
     onEvent,
     requestState,
     send,
+    stripTrackingParams,
     type EdgeSide,
     type PeekEvent,
     type PinnedSite,
@@ -21,6 +22,8 @@
   let activeUrl = $state('about:blank');
   let activeTitle = $state('');
   let activeFavicon = $state<string | null>(null);
+  let activeAudible = $state(false);
+  let readerModeActive = $state(false);
   let insecure = $state(false);
   let loading = $state(false);
   let searchEngine = $state('Google');
@@ -29,6 +32,185 @@
   let drawerOpen = $state(false);
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let inputEl = $state<HTMLInputElement | null>(null);
+
+  // Toast Notifications
+  let toastMessage = $state<string | null>(null);
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  function triggerToast(msg: string) {
+    toastMessage = msg;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastMessage = null;
+    }, 2200);
+  }
+
+  function copyCleanLink() {
+    if (isBlank(activeUrl)) return;
+    const clean = stripTrackingParams(activeUrl);
+    try {
+      navigator.clipboard?.writeText(clean);
+    } catch {}
+    send({ type: 'copyCleanUrl', url: activeUrl });
+    triggerToast('Clean URL copied to clipboard');
+  }
+
+  type PaletteCommand = {
+    id: string;
+    title: string;
+    detail: string;
+    shortcut?: string;
+    keywords: string[];
+    action: () => void;
+  };
+
+  const COMMANDS: PaletteCommand[] = [
+    {
+      id: 'new-tab',
+      title: 'New Tab',
+      detail: 'Open a blank tab',
+      shortcut: '⌘T',
+      keywords: ['new', 'tab', 'open', 'page'],
+      action: () => send({ type: 'newTab' }),
+    },
+    {
+      id: 'close-tab',
+      title: 'Close Active Tab',
+      detail: 'Close the current tab',
+      shortcut: '⌘W',
+      keywords: ['close', 'tab', 'kill'],
+      action: () => {
+        if (activeId != null) send({ type: 'closeTab', id: activeId });
+      },
+    },
+    {
+      id: 'dup-tab',
+      title: 'Duplicate Tab',
+      detail: 'Clone active page into a new tab',
+      shortcut: '⌘⇧D',
+      keywords: ['duplicate', 'clone', 'copy', 'tab'],
+      action: () => {
+        if (!isBlank(activeUrl)) send({ type: 'newTab', url: activeUrl });
+      },
+    },
+    {
+      id: 'clean-link',
+      title: 'Copy Clean URL',
+      detail: 'Copy URL stripped of tracking parameters',
+      shortcut: '⌘⇧C',
+      keywords: ['clean', 'link', 'url', 'copy', 'strip', 'tracking', 'utm', 'share'],
+      action: () => copyCleanLink(),
+    },
+    {
+      id: 'reader-mode',
+      title: 'Toggle Reader Mode',
+      detail: 'Distraction-free article reader view',
+      shortcut: '⌘⇧R',
+      keywords: ['reader', 'mode', 'read', 'article', 'clean', 'view', 'text'],
+      action: () => send({ type: 'toggleReaderMode' }),
+    },
+    {
+      id: 'find-page',
+      title: 'Find in Page',
+      detail: 'Open in-page search bar',
+      shortcut: '⌘F',
+      keywords: ['find', 'search', 'page', 'text', 'match'],
+      action: () => send({ type: 'findInPage', query: '', forward: true }),
+    },
+    {
+      id: 'toggle-mute',
+      title: 'Mute / Unmute Tab Audio',
+      detail: 'Toggle audio playback mute on active tab',
+      shortcut: '⌘⇧M',
+      keywords: ['mute', 'audio', 'sound', 'unmute', 'volume', 'quiet', 'music'],
+      action: () => send({ type: 'toggleMuteTab' }),
+    },
+    {
+      id: 'hibernate-others',
+      title: 'Hibernate Inactive Tabs',
+      detail: 'Free RAM by sleeping background tabs immediately',
+      shortcut: '⌘⌥H',
+      keywords: ['hibernate', 'sleep', 'ram', 'memory', 'clean', 'save', 'budget'],
+      action: () => {
+        send({ type: 'discardOtherTabs' });
+        triggerToast('Inactive background tabs hibernated');
+      },
+    },
+    {
+      id: 'open-tabs',
+      title: 'Open Tabs & Drawer',
+      detail: 'Explore live tabs and memory stats',
+      shortcut: '⌘⇧[',
+      keywords: ['tabs', 'drawer', 'list', 'left'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' }),
+    },
+    {
+      id: 'open-history',
+      title: 'Browsing History',
+      detail: 'Search and manage visited websites',
+      shortcut: '⌘Y',
+      keywords: ['history', 'recent', 'visits', 'sites', 'past'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'history' }),
+    },
+    {
+      id: 'open-bookmarks',
+      title: 'Saved Bookmarks',
+      detail: 'View and open saved bookmarks',
+      shortcut: '⌘⇧B',
+      keywords: ['bookmarks', 'saved', 'favorites', 'stars'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'bookmarks' }),
+    },
+    {
+      id: 'open-settings',
+      title: 'Settings & Tools',
+      detail: 'Configure search engine, themes, and memory budget',
+      shortcut: '⌘⇧]',
+      keywords: ['settings', 'preferences', 'options', 'tools', 'right'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'right', section: 'general' }),
+    },
+    {
+      id: 'open-adblock',
+      title: 'Adblock & Privacy',
+      detail: 'Manage tracker blocking and cookie controls',
+      keywords: ['adblock', 'privacy', 'blocking', 'shield', 'trackers'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'right', section: 'blocking' }),
+    },
+    {
+      id: 'clear-cookies',
+      title: 'Clear Cookies & Web Data',
+      detail: 'Flush profile storage and session cookies',
+      keywords: ['clear', 'cookies', 'storage', 'cache', 'data', 'reset'],
+      action: () => {
+        send({ type: 'clearCookies' });
+        triggerToast('Cookies and local storage cleared');
+      },
+    },
+    {
+      id: 'clear-history',
+      title: 'Clear Browsing History',
+      detail: 'Erase all visited pages from history',
+      keywords: ['clear', 'history', 'delete', 'erase', 'privacy'],
+      action: () => {
+        send({ type: 'clearHistory' });
+        triggerToast('Browsing history erased');
+      },
+    },
+    {
+      id: 'reload-page',
+      title: 'Reload Current Page',
+      detail: 'Refresh active tab content',
+      shortcut: '⌘R',
+      keywords: ['reload', 'refresh'],
+      action: () => send({ type: 'reload' }),
+    },
+    {
+      id: 'quit-peek',
+      title: 'Quit Peek',
+      detail: 'Exit the browser',
+      shortcut: '⌘Q',
+      keywords: ['quit', 'exit', 'close'],
+      action: () => send({ type: 'quit' }),
+    },
+  ];
 
   // Pinned Websites State
   let pinnedSites = $state<PinnedSite[]>([]);
@@ -131,7 +313,12 @@
   }
 
   function accept(item: Suggestion) {
-    if (item.kind === 'tab' && item.tabId != null) {
+    if (item.kind === 'command') {
+      const cmd = COMMANDS.find((c) => c.title === item.text);
+      if (cmd) {
+        cmd.action();
+      }
+    } else if (item.kind === 'tab' && item.tabId != null) {
       send({ type: 'switchTab', id: item.tabId });
     } else if (item.url) {
       send({ type: 'navigate', input: item.url });
@@ -143,6 +330,8 @@
 
   function label(kind: Suggestion['kind']): string {
     switch (kind) {
+      case 'command':
+        return 'CMD';
       case 'tab':
         return 'Tab';
       case 'history':
@@ -164,6 +353,7 @@
           activeUrl = active.url;
           activeTitle = active.title;
           activeFavicon = active.favicon;
+          activeAudible = active.audible;
           insecure = active.url.startsWith('http://');
           if (!focused) {
             input = isBlank(active.url) ? '' : displayUrl(active.url);
@@ -214,9 +404,32 @@
           }
         }
         break;
+      case 'readerModeState':
+        readerModeActive = event.active;
+        break;
+      case 'toast':
+        triggerToast(event.message);
+        break;
       case 'suggestionsReady':
         if (event.query === input) {
-          suggestions = event.items.slice(0, 6);
+          if (input.startsWith('>')) {
+            return;
+          }
+          const queryLower = input.trim().toLowerCase();
+          const directCmds = queryLower.length >= 2
+            ? COMMANDS.filter(
+                (c) =>
+                  c.title.toLowerCase().startsWith(queryLower) ||
+                  c.keywords.some((k) => k === queryLower)
+              ).map((c) => ({
+                kind: 'command' as const,
+                text: c.title,
+                detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
+                url: null,
+                tabId: null,
+              }))
+            : [];
+          suggestions = [...directCmds.slice(0, 2), ...event.items].slice(0, 7);
           selected = -1;
         }
         break;
@@ -296,12 +509,54 @@
   function onInput() {
     send({ type: 'setOmnibarOpen', open: true });
     if (suggestTimer) clearTimeout(suggestTimer);
-    const query = input;
-    if (!query.trim()) {
+    const raw = input;
+    if (!raw.trim()) {
       suggestions = [];
       return;
     }
-    suggestTimer = setTimeout(() => send({ type: 'suggest', query }), 80);
+
+    if (raw.startsWith('>')) {
+      const query = raw.slice(1).trim().toLowerCase();
+      const matched = !query
+        ? COMMANDS
+        : COMMANDS.filter(
+            (c) =>
+              c.title.toLowerCase().includes(query) ||
+              c.keywords.some((k) => k.includes(query)) ||
+              c.detail.toLowerCase().includes(query)
+          );
+      suggestions = matched.slice(0, 7).map((c) => ({
+        kind: 'command',
+        text: c.title,
+        detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
+        url: null,
+        tabId: null,
+      }));
+      selected = -1;
+      return;
+    }
+
+    const queryLower = raw.trim().toLowerCase();
+    const directCmds = queryLower.length >= 2
+      ? COMMANDS.filter(
+          (c) =>
+            c.title.toLowerCase().startsWith(queryLower) ||
+            c.keywords.some((k) => k === queryLower)
+        ).map((c) => ({
+          kind: 'command' as const,
+          text: c.title,
+          detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
+          url: null,
+          tabId: null,
+        }))
+      : [];
+
+    suggestTimer = setTimeout(() => {
+      send({ type: 'suggest', query: raw });
+      if (directCmds.length > 0 && !suggestions.some((s) => s.kind === 'command')) {
+        suggestions = [...directCmds.slice(0, 2), ...suggestions].slice(0, 7);
+      }
+    }, 75);
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -395,6 +650,13 @@
       const key = event.key.toLowerCase();
 
       if (mod && !event.shiftKey && !event.altKey) {
+        if (key === 'k') {
+          event.preventDefault();
+          openBar();
+          input = '> ';
+          onInput();
+          return;
+        }
         if (key === 'l') {
           event.preventDefault();
           openBar();
@@ -417,9 +679,29 @@
           send({ type: 'reload' });
           return;
         }
+        if (key === 'f') {
+          event.preventDefault();
+          send({ type: 'findInPage', query: '', forward: true });
+          return;
+        }
       }
 
       if (mod && event.shiftKey && !event.altKey) {
+        if (key === 'c') {
+          event.preventDefault();
+          copyCleanLink();
+          return;
+        }
+        if (key === 'r') {
+          event.preventDefault();
+          send({ type: 'toggleReaderMode' });
+          return;
+        }
+        if (key === 'm') {
+          event.preventDefault();
+          send({ type: 'toggleMuteTab' });
+          return;
+        }
         if (key === '[' || key === '{') {
           event.preventDefault();
           send({ type: 'setDrawer', open: !drawerOpen, side: 'left', section: 'tabs' });
@@ -585,6 +867,7 @@
       {/if}
 
       <div class="hero-brand">
+        <div class="hero-ambient-glow" aria-hidden="true"></div>
         <div class="logo-wrapper">
           <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
         </div>
@@ -719,6 +1002,10 @@
 
         <!-- Minimalist Keyboard & Gesture Affordances -->
         <div class="start-hints-row" aria-label="Shortcuts and Gestures">
+          <span class="start-hint-pill" title="Press ⌘K or type > for Command Palette">
+            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">K</kbd> Commands
+          </span>
+          <span class="start-hint-dot">•</span>
           <span class="start-hint-pill">
             <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
           </span>
@@ -913,6 +1200,58 @@
           </svg>
         </button>
 
+        <!-- Copy Clean URL Button (Strips tracking parameters) -->
+        <button
+          class="tool-btn copy-clean-btn"
+          title="Copy Clean URL (⌘⇧C)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            copyCleanLink();
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <path d="M6.5 9.5a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-1 1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9.5 6.5a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l1-1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- Reader Mode Button -->
+        <button
+          class="tool-btn reader-btn"
+          class:active-reader={readerModeActive}
+          title="Toggle Reader Mode (⌘⇧R)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'toggleReaderMode' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <path d="M2.5 3.5A2 2 0 0 1 4.5 2h7a2 2 0 0 1 2 2v9.5l-4-2-4 2V3.5z" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.5 5.5h5M5.5 8h3.5" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <!-- Audio Equalizer / Mute Button -->
+        {#if activeAudible}
+          <button
+            class="tool-btn audio-btn"
+            title="Mute / Unmute Audio (⌘⇧M)"
+            type="button"
+            onclick={(e) => {
+              e.stopPropagation();
+              send({ type: 'toggleMuteTab' });
+            }}
+          >
+            <span class="audio-waves" aria-hidden="true">
+              <span class="wave-bar b1"></span>
+              <span class="wave-bar b2"></span>
+              <span class="wave-bar b3"></span>
+            </span>
+          </button>
+        {/if}
+
         <!-- Shield / Privacy Button -->
         <button
           class="tool-btn shield-btn"
@@ -992,6 +1331,13 @@
     <div class="tab-hud-toast" role="status" aria-live="polite">
       <span class="tab-hud-badge">Tab {hudTabIndex} of {hudTabTotal}</span>
       <span class="tab-hud-title">{hudTabTitle}</span>
+    </div>
+  {/if}
+
+  {#if toastMessage}
+    <div class="peek-toast" role="status">
+      <span class="toast-dot"></span>
+      <span class="toast-text">{toastMessage}</span>
     </div>
   {/if}
 </div>
@@ -1156,10 +1502,30 @@
   }
 
   .hero-brand {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     margin-bottom: 22px;
+  }
+
+  .hero-ambient-glow {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-glow, rgba(59, 130, 246, 0.22)) 0%, transparent 70%);
+    filter: blur(48px);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.65;
+    animation: ambientPulse 6s ease-in-out infinite alternate;
+  }
+
+  @keyframes ambientPulse {
+    0% { transform: scale(0.9); opacity: 0.45; }
+    100% { transform: scale(1.15); opacity: 0.75; }
   }
 
   .logo-wrapper {
@@ -1965,6 +2331,85 @@
   .badge.search {
     color: #10b981;
     background: color-mix(in srgb, #10b981 18%, transparent);
+  }
+
+  .badge.command {
+    color: #c084fc;
+    background: color-mix(in srgb, #a855f7 22%, transparent);
+  }
+
+  .tool-btn.reader-btn.active-reader {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.16);
+  }
+
+  .audio-btn {
+    padding: 0 4px;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border-radius: 4px;
+  }
+
+  .audio-waves {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 11px;
+  }
+
+  .wave-bar {
+    width: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+    animation: waveEqualizer 0.7s ease-in-out infinite alternate;
+  }
+
+  .wave-bar.b1 { height: 4px; animation-delay: 0.1s; }
+  .wave-bar.b2 { height: 11px; animation-delay: 0.25s; }
+  .wave-bar.b3 { height: 7px; animation-delay: 0.18s; }
+
+  @keyframes waveEqualizer {
+    0% { height: 2px; }
+    100% { height: 11px; }
+  }
+
+  .peek-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: color-mix(in srgb, var(--panel) 92%, #000);
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    z-index: 10000;
+    pointer-events: none;
+    animation: toastPop 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes toastPop {
+    from { opacity: 0; transform: translate(-50%, 8px) scale(0.96); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+
+  .toast-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+
+  .toast-text {
+    font-size: 12.5px;
+    color: var(--text);
+    font-weight: 500;
+    letter-spacing: -0.01em;
   }
 
   .text {

@@ -13,7 +13,8 @@ use peek_engine::{
     Bounds, Engine, EngineEvents, LoadEvent, WebViewId, WebViewOptions, WryEngine,
 };
 use peek_ipc::{
-    Command, EdgeSide, Envelope, Event, ExtensionSummary, PageEvent, Shortcut, Suggestion, SuggestionKind, TabId,
+    BookmarkItem, Command, EdgeSide, Envelope, Event, ExtensionSummary, HistoryItem, PageEvent,
+    Shortcut, Suggestion, SuggestionKind, TabId,
 };
 use peek_preview::{PreviewAction, PreviewConfig, PreviewController};
 use peek_store::{Session, Store};
@@ -722,6 +723,115 @@ impl App {
             Command::HidePreview => {
                 self.hide_preview();
             }
+            Command::CopyCleanUrl { url } => {
+                let clean = peek_core::url::strip_tracking_params(&url);
+                if let Some(ui_id) = self.ui_id {
+                    let escaped = serde_json::to_string(&clean).unwrap_or_default();
+                    let js = format!("if (navigator.clipboard) navigator.clipboard.writeText({escaped});");
+                    let _ = self.engine.evaluate(ui_id, &js);
+                }
+                self.send(Event::Toast {
+                    message: "Clean URL copied".into(),
+                });
+            }
+            Command::ToggleMuteTab { id } => {
+                let target = id.or_else(|| self.tabs.active_id());
+                if let Some(tab_id) = target {
+                    if let Some(view) = self.tab_views.get(&tab_id).copied() {
+                        let _ = self.engine.evaluate(view, "if (window.__peekToggleMute) window.__peekToggleMute();");
+                        self.send(Event::Toast {
+                            message: "Toggled audio mute".into(),
+                        });
+                    }
+                }
+            }
+            Command::ToggleReaderMode => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekToggleReader) window.__peekToggleReader();");
+                }
+            }
+            Command::FindInPage { query, forward } => {
+                if let Some(view) = self.active_view() {
+                    let escaped = serde_json::to_string(&query).unwrap_or_default();
+                    let js = format!("if (window.__peekFind) window.__peekFind({escaped}, {forward});");
+                    let _ = self.engine.evaluate(view, &js);
+                }
+            }
+            Command::CloseFind => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekCloseFind) window.__peekCloseFind();");
+                }
+            }
+            Command::GetHistory { query } => {
+                let list = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+                    self.store.search_history(&q, 100).unwrap_or_default()
+                } else {
+                    self.store.recent_history(100).unwrap_or_default()
+                };
+                let entries = list.into_iter().map(|h| HistoryItem {
+                    url: h.url,
+                    title: h.title,
+                    visit_count: h.visit_count,
+                    last_visit: h.last_visit,
+                }).collect();
+                self.send(Event::HistoryList { entries });
+            }
+            Command::DeleteHistoryItem { url } => {
+                let _ = self.store.delete_history_url(&url);
+                let list = self.store.recent_history(100).unwrap_or_default();
+                let entries = list.into_iter().map(|h| HistoryItem {
+                    url: h.url,
+                    title: h.title,
+                    visit_count: h.visit_count,
+                    last_visit: h.last_visit,
+                }).collect();
+                self.send(Event::HistoryList { entries });
+                self.send(Event::Toast { message: "History item deleted".into() });
+            }
+            Command::ClearHistory => {
+                let _ = self.store.clear_history();
+                self.send(Event::HistoryList { entries: Vec::new() });
+                self.send(Event::Toast { message: "Browsing history cleared".into() });
+            }
+            Command::GetBookmarks { query } => {
+                let list = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+                    self.store.search_bookmarks(&q, 100).unwrap_or_default()
+                } else {
+                    self.store.bookmarks().unwrap_or_default()
+                };
+                let bookmarks = list.into_iter().map(|b| BookmarkItem {
+                    id: b.id,
+                    url: b.url,
+                    title: b.title,
+                    favicon: b.favicon,
+                    created_at: b.created_at,
+                }).collect();
+                self.send(Event::BookmarksList { bookmarks });
+            }
+            Command::ToggleBookmark { url, title } => {
+                let clean = url.trim();
+                if !clean.is_empty() && !peek_core::url::is_blank(clean) {
+                    if let Ok(is_bm) = self.store.is_bookmarked(clean) {
+                        if is_bm {
+                            let _ = self.store.remove_bookmark_by_url(clean);
+                            self.send(Event::Toast { message: "Removed bookmark".into() });
+                        } else {
+                            let _ = self.store.add_bookmark(clean, &title, None, now_ms());
+                            self.send(Event::Toast { message: "Saved to bookmarks".into() });
+                        }
+                        self.send_pinned_sites();
+                        let list = self.store.bookmarks().unwrap_or_default();
+                        let bookmarks = list.into_iter().map(|b| BookmarkItem {
+                            id: b.id,
+                            url: b.url,
+                            title: b.title,
+                            favicon: b.favicon,
+                            created_at: b.created_at,
+                        }).collect();
+                        self.send(Event::BookmarksList { bookmarks });
+                    }
+                }
+            }
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -899,6 +1009,35 @@ impl App {
             Shortcut::OpenTabsDrawer => self.open_drawer_on_side(EdgeSide::Left, Some("tabs")),
             Shortcut::OpenSettingsDrawer => self.open_drawer_on_side(EdgeSide::Right, Some("settings")),
             Shortcut::OpenCommandPalette => self.send(Event::FocusOmnibar),
+            Shortcut::CopyCleanUrl => {
+                if let Some(tab) = self.tabs.active() {
+                    let clean = peek_core::url::strip_tracking_params(&tab.url);
+                    if let Some(ui_id) = self.ui_id {
+                        let escaped = serde_json::to_string(&clean).unwrap_or_default();
+                        let js = format!("if (navigator.clipboard) navigator.clipboard.writeText({escaped});");
+                        let _ = self.engine.evaluate(ui_id, &js);
+                    }
+                    self.send(Event::Toast {
+                        message: "Clean URL copied".into(),
+                    });
+                }
+            }
+            Shortcut::FindInPage => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekShowFind) window.__peekShowFind();");
+                }
+            }
+            Shortcut::ToggleReaderMode => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekToggleReader) window.__peekToggleReader();");
+                }
+            }
+            Shortcut::ToggleMute => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekToggleMute) window.__peekToggleMute();");
+                    self.send(Event::Toast { message: "Toggled audio mute".into() });
+                }
+            }
         }
     }
 
