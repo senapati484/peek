@@ -58,13 +58,13 @@ export type PeekEvent =
   | { type: 'tabsChanged'; tabs: TabInfo[]; active: number | null }
   | { type: 'activeTabChanged'; id: number }
   | {
-      type: 'loading';
-      id: number;
-      url: string;
-      loading: boolean;
-      canGoBack: boolean;
-      canGoForward: boolean;
-    }
+    type: 'loading';
+    id: number;
+    url: string;
+    loading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
+  }
   | { type: 'titleChanged'; id: number; title: string }
   | { type: 'urlChanged'; id: number; url: string }
   | { type: 'suggestionsReady'; query: string; items: Suggestion[] }
@@ -76,15 +76,15 @@ export type PeekEvent =
   | { type: 'cookiesCount'; count: number }
   | { type: 'extensionsList'; extensions: ExtensionSummary[] }
   | {
-      type: 'settings';
-      maxLive: number;
-      idleDiscardMinutes: number;
-      hoverDelayMs: number;
-      drawerSide: EdgeSide;
-      edgeZone: number;
-      startBlank: boolean;
-      searchEngine: string;
-    }
+    type: 'settings';
+    maxLive: number;
+    idleDiscardMinutes: number;
+    hoverDelayMs: number;
+    drawerSide: EdgeSide;
+    edgeZone: number;
+    startBlank: boolean;
+    searchEngine: string;
+  }
   | { type: 'pinnedSitesChanged'; sites: PinnedSite[] }
   | { type: 'toast'; message: string }
   | { type: 'historyList'; entries: HistoryItem[] }
