@@ -291,31 +291,6 @@
   let zenHovered = $state(false);
   let zenHoverTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Jump Back In (Recent Sites)
-  let recentSites = $state<HistoryItem[]>([]);
-
-  const SEARCH_ENGINES = [
-    { id: 'google', label: 'Google', icon: '🔍' },
-    { id: 'duckduckgo', label: 'DuckDuckGo', icon: '🦆' },
-    { id: 'brave', label: 'Brave', icon: '🦁' },
-    { id: 'github', label: 'GitHub', icon: '🐙' },
-    { id: 'youtube', label: 'YouTube', icon: '▶' },
-    { id: 'perplexity', label: 'Perplexity', icon: '⚡' },
-  ];
-
-  function getGreeting(): string {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  function selectEngine(engineId: string) {
-    searchEngine = engineId;
-    send({ type: 'setSetting', key: 'searchEngine', value: engineId });
-    triggerToast(`Default search: ${engineId}`);
-  }
-
   // Pinned Websites State
   let pinnedSites = $state<PinnedSite[]>([]);
   let showAddPinModal = $state(false);
@@ -523,21 +498,8 @@
       case 'invertDarkState':
         invertDarkActive = event.active;
         break;
-      case 'historyList': {
-        const seen = new Set<string>();
-        recentSites = event.entries.filter((e) => {
-          if (!e.url || isBlank(e.url)) return false;
-          try {
-            const host = new URL(e.url).hostname;
-            if (seen.has(host)) return false;
-            seen.add(host);
-            return true;
-          } catch {
-            return false;
-          }
-        }).slice(0, 4);
+      case 'historyList':
         break;
-      }
       case 'toast':
         triggerToast(event.message);
         break;
@@ -885,7 +847,7 @@
     let lastEdge = 0;
 
     const onWindowMouseMove = (ev: MouseEvent) => {
-      if (!isStartPage || drawerOpen || ev.buttons !== 0) return;
+      if (drawerOpen || ev.buttons !== 0) return;
       const zone = 10;
       const atLeft = ev.clientX <= zone;
       const atRight = window.innerWidth - ev.clientX <= zone;
@@ -902,16 +864,27 @@
       edgeTimer = setTimeout(() => {
         edgeTimer = null;
         const now = Date.now();
-        if (now - lastEdge < 800) return;
+        if (now - lastEdge < 350) return;
         lastEdge = now;
         send({ type: 'setDrawer', open: true, side, section });
-      }, 140);
+      }, 60);
     };
 
-    const onWindowMouseLeave = () => {
+    const onWindowMouseLeave = (ev: MouseEvent) => {
       if (edgeTimer) {
         clearTimeout(edgeTimer);
         edgeTimer = null;
+      }
+      if (drawerOpen) return;
+      const zone = 12;
+      const now = Date.now();
+      if (now - lastEdge < 350) return;
+      if (ev.clientX <= zone) {
+        lastEdge = now;
+        send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
+      } else if (window.innerWidth - ev.clientX <= zone) {
+        lastEdge = now;
+        send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
       }
     };
 
@@ -940,69 +913,13 @@
   role="presentation"
 >
   {#if isStartPage}
-    <!-- Center Start Page Layout: Responsive Search Bar + Clean Corner Affordances -->
+    <!-- Center Start Page Layout: Pure Minimalist Search & Pinned Speed Dial -->
     <div class="start-center">
-      {#if !drawerOpen}
-        <!-- Left Corner: Quick Tabs Affordance -->
-        <div class="start-corner left">
-          <button
-            class="start-corner-pill"
-            title="Open Tabs (or hover left edge) • ⌘⇧["
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
-              <rect x="2" y="2.5" width="12" height="11" rx="2" stroke-width="1.3" />
-              <path d="M6 2.5v11" stroke-width="1.3" />
-            </svg>
-            <span class="corner-text">Tabs</span>
-            <kbd class="corner-kbd">⌘⇧[</kbd>
-          </button>
-        </div>
-
-        <!-- Right Corner: Quick Settings & Profile Affordances -->
-        <div class="start-corner right">
-          <button
-            class="start-corner-pill"
-            title="Open Settings & Tools (or hover right edge) • ⌘⇧]"
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
-              <circle cx="8" cy="8" r="2.5" stroke-width="1.3" />
-              <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke-width="1.3" stroke-linecap="round" />
-            </svg>
-            <span class="corner-text">Settings</span>
-            <kbd class="corner-kbd">⌘⇧]</kbd>
-          </button>
-
-          <button
-            class="start-profile-chip"
-            title={`Active Profile: ${activeProfile} (Click to switch)`}
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
-            }}
-          >
-            <span class="profile-avatar-dot">{profileInitial}</span>
-            <span class="profile-chip-name">{activeProfile}</span>
-          </button>
-        </div>
-      {/if}
-
       <div class="hero-brand">
         <div class="hero-ambient-glow" aria-hidden="true"></div>
         <div class="logo-wrapper">
           <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
         </div>
-        <div class="hero-greeting">{getGreeting()}</div>
       </div>
 
       <div class="search-box">
@@ -1042,21 +959,6 @@
           {/if}
         </div>
 
-        <!-- Search Engine Quick Switcher -->
-        <div class="engine-pills-row">
-          {#each SEARCH_ENGINES as eng}
-            <button
-              class="engine-chip"
-              class:active={searchEngine.toLowerCase() === eng.id}
-              type="button"
-              onclick={() => selectEngine(eng.id)}
-            >
-              <span class="eng-icon">{eng.icon}</span>
-              <span class="eng-label">{eng.label}</span>
-            </button>
-          {/each}
-        </div>
-
         {#if suggestions.length}
           <div class="start-suggestions" role="listbox">
             {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
@@ -1081,27 +983,8 @@
         {/if}
       </div>
 
+      <!-- Only show Pinned Sites when user is NOT actively typing and suggestions are closed -->
       {#if !input.trim() && !suggestions.length}
-        {#if recentSites.length > 0}
-          <div class="recent-jumps-section">
-            <span class="recent-jumps-title">Jump Back In</span>
-            <div class="recent-jumps-row">
-              {#each recentSites as site}
-                <button
-                  class="recent-jump-chip"
-                  type="button"
-                  onclick={() => handleOpenPin(site.url)}
-                  title={site.url}
-                >
-                  <span class="recent-jump-initial">{domainInitial(site.url)}</span>
-                  <span class="recent-jump-title">{site.title || cleanDomain(site.url)}</span>
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        <!-- Pinned Websites Speed Dial Grid -->
         <div class="pinned-section">
           <div class="pinned-grid">
             {#each pinnedSites as site (site.id)}
@@ -1164,29 +1047,6 @@
               <span class="pin-title">Add Pin</span>
             </button>
           </div>
-        </div>
-
-        <!-- Minimalist Keyboard & Gesture Affordances -->
-        <div class="start-hints-row" aria-label="Shortcuts and Gestures">
-          <span class="start-hint-pill" title="Press ⌘K or type > for Command Palette">
-            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">K</kbd> Commands
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill">
-            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
-            <kbd class="start-kbd">Space</kbd> Link Peek
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
-            <span class="start-hint-icon">⇄</span> Swipe to Switch
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
-            <span class="start-hint-icon">⇥</span> Edge Drawers
-          </span>
         </div>
       {/if}
 
@@ -1624,128 +1484,6 @@
     animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* Corner Affordances: Tabs (Left) and Settings & Profile (Right) */
-  .start-corner {
-    position: absolute;
-    top: 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    z-index: 20;
-    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .start-corner.left {
-    left: 24px;
-  }
-
-  .start-corner.right {
-    right: 24px;
-  }
-
-  .start-corner-pill {
-    all: unset;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 12px 5px 10px;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--surface) 80%, transparent);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.16s ease;
-  }
-
-  .start-corner-pill:hover {
-    background: var(--hover);
-    color: var(--text);
-    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-  }
-
-  .corner-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--muted);
-    transition: color 0.15s ease;
-  }
-
-  .start-corner-pill:hover .corner-icon {
-    color: var(--accent);
-  }
-
-  .corner-text {
-    letter-spacing: -0.01em;
-  }
-
-  .corner-kbd {
-    all: unset;
-    font-size: 10px;
-    font-weight: 600;
-    font-family: inherit;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    color: var(--muted);
-    border: 1px solid var(--border-subtle);
-    margin-left: 2px;
-    letter-spacing: 0.02em;
-  }
-
-  .start-corner-pill:hover .corner-kbd {
-    color: var(--text);
-    border-color: var(--border);
-  }
-
-  .start-profile-chip {
-    all: unset;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 4px 11px 4px 5px;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--panel) 75%, transparent);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition: all 0.15s ease;
-  }
-
-  .start-profile-chip:hover {
-    background: var(--hover);
-    color: var(--text);
-    border-color: var(--accent);
-  }
-
-  .profile-avatar-dot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #ffffff;
-    font-size: 10.5px;
-    font-weight: 700;
-  }
-
-  .profile-chip-name {
-    letter-spacing: -0.01em;
-  }
-
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -1763,7 +1501,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-bottom: 22px;
+    margin-bottom: 24px;
   }
 
   .hero-ambient-glow {
@@ -1803,137 +1541,6 @@
 
   .hero-logo:hover {
     transform: scale(1.06);
-  }
-
-  .hero-greeting {
-    margin-top: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    opacity: 0.85;
-    user-select: none;
-  }
-
-  /* Engine Selector Chips */
-  .engine-pills-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    margin-top: 14px;
-    flex-wrap: wrap;
-    user-select: none;
-  }
-
-  .engine-chip {
-    all: unset;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 9999px;
-    font-size: 11px;
-    color: var(--muted);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    transition: all 0.14s ease;
-  }
-
-  .engine-chip:hover {
-    background: rgba(255, 255, 255, 0.09);
-    color: var(--text);
-    border-color: rgba(255, 255, 255, 0.14);
-    transform: translateY(-0.5px);
-  }
-
-  .engine-chip.active {
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-    font-weight: 600;
-  }
-
-  .eng-icon {
-    font-size: 10.5px;
-  }
-
-  .eng-label {
-    letter-spacing: 0.01em;
-  }
-
-  /* Recent Jumps */
-  .recent-jumps-section {
-    width: 100%;
-    max-width: min(620px, calc(100vw - 48px));
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    user-select: none;
-    animation: fadeIn 0.28s ease;
-  }
-
-  .recent-jumps-title {
-    font-size: 10.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--muted);
-    opacity: 0.8;
-  }
-
-  .recent-jumps-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .recent-jump-chip {
-    all: unset;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    font-size: 12px;
-    color: var(--text);
-    max-width: 170px;
-    transition: all 0.14s ease;
-  }
-
-  .recent-jump-chip:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.16);
-    transform: translateY(-1px);
-  }
-
-  .recent-jump-initial {
-    width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--hover);
-    border-radius: 4px;
-    font-size: 9.5px;
-    font-weight: 600;
-    color: var(--accent);
-    flex-shrink: 0;
-  }
-
-  .recent-jump-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 450;
   }
 
   /* Sleek, Prominent Responsive Search Box */
@@ -2018,7 +1625,7 @@
     right: 0;
     border: 1px solid var(--border);
     border-radius: 16px;
-    background: color-mix(in srgb, var(--panel) 98%, #000);
+    background: var(--panel);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 4px 16px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
@@ -2026,7 +1633,9 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    z-index: 100;
+    z-index: 1000;
+    max-height: 380px;
+    overflow-y: auto;
     animation: dropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -2120,11 +1729,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
     transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -2340,58 +1947,6 @@
   .modal-actions .btn.primary:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
-  }
-
-  /* Minimalist Keyboard & Gesture Affordances */
-  .start-hints-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
-    user-select: none;
-    pointer-events: auto;
-  }
-
-  .start-hint-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
-    color: var(--muted);
-    letter-spacing: -0.01em;
-    padding: 3px 6px;
-    border-radius: 6px;
-    transition: color 0.15s ease;
-  }
-
-  .start-hint-pill:hover {
-    color: var(--text-secondary);
-  }
-
-  .start-kbd {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", inherit;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 4.5px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    line-height: 1.2;
-  }
-
-  .start-hint-dot {
-    font-size: 10px;
-    color: var(--border);
-    user-select: none;
-  }
-
-  .start-hint-icon {
-    font-size: 12px;
-    opacity: 0.8;
   }
 
   /* Docked Top Bar: Clean Full-Width Toolbar */

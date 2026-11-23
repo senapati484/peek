@@ -432,10 +432,18 @@ const PAGE_SCRIPT: &str = r##"
   var edgeTimer = null;
   var lastEdge = 0;
 
-  window.addEventListener("mousemove", function (ev) {
-    if (ev.buttons !== 0) return;
-    var atLeft = ev.clientX <= EDGE_ZONE;
-    var atRight = (window.innerWidth - ev.clientX) <= EDGE_ZONE;
+  function handleEdgeMove(ev) {
+    if (!ev || ev.buttons !== 0) return;
+    var winW = window.innerWidth;
+    var docW = (document.documentElement && document.documentElement.clientWidth) || winW;
+    var rightLimit = Math.min(winW, docW);
+    var distRight = Math.min(winW - ev.clientX, rightLimit - ev.clientX);
+    var distLeft = ev.clientX;
+
+    var zone = Math.max(10, typeof EDGE_ZONE === "number" ? EDGE_ZONE : 10);
+    var atLeft = distLeft <= zone;
+    var atRight = distRight <= zone;
+
     if (!atLeft && !atRight) {
       if (edgeTimer) { clearTimeout(edgeTimer); edgeTimer = null; }
       return;
@@ -445,14 +453,32 @@ const PAGE_SCRIPT: &str = r##"
     edgeTimer = setTimeout(function () {
       edgeTimer = null;
       var now = Date.now();
-      if (now - lastEdge < 800) return;
+      if (now - lastEdge < 350) return;
       lastEdge = now;
       send({ type: "edgeProximity", side: side, distance: 0 });
-    }, 150);
-  }, { passive: true });
+    }, 60);
+  }
 
-  window.addEventListener("mouseleave", function () {
+  window.addEventListener("mousemove", handleEdgeMove, { passive: true });
+
+  window.addEventListener("mouseleave", function (ev) {
     if (edgeTimer) { clearTimeout(edgeTimer); edgeTimer = null; }
+    if (ev && typeof ev.clientX === "number") {
+      var winW = window.innerWidth;
+      var docW = (document.documentElement && document.documentElement.clientWidth) || winW;
+      var rightLimit = Math.min(winW, docW);
+      var zone = Math.max(12, typeof EDGE_ZONE === "number" ? EDGE_ZONE + 2 : 12);
+      var now = Date.now();
+      if (now - lastEdge >= 350) {
+        if (ev.clientX <= zone) {
+          lastEdge = now;
+          send({ type: "edgeProximity", side: "left", distance: 0 });
+        } else if (ev.clientX >= rightLimit - zone || ev.clientX >= winW - zone) {
+          lastEdge = now;
+          send({ type: "edgeProximity", side: "right", distance: 0 });
+        }
+      }
+    }
   });
 
   var lastWheelNav = 0;
@@ -460,8 +486,11 @@ const PAGE_SCRIPT: &str = r##"
     if (Math.abs(ev.deltaX) > 35 && Math.abs(ev.deltaY) < 25) {
       var now = Date.now();
       if (now - lastWheelNav < 700) return;
-      var atLeftEdge = ev.clientX <= EDGE_ZONE + 40;
-      var atRightEdge = (window.innerWidth - ev.clientX) <= EDGE_ZONE + 40;
+      var winW = window.innerWidth;
+      var docW = (document.documentElement && document.documentElement.clientWidth) || winW;
+      var rightLimit = Math.min(winW, docW);
+      var atLeftEdge = ev.clientX <= 50;
+      var atRightEdge = (winW - ev.clientX) <= 50 || (rightLimit - ev.clientX) <= 50;
       if (atLeftEdge && ev.deltaX < -25) {
         lastWheelNav = now;
         send({ type: "edgeProximity", side: "left", distance: 0 });

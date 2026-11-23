@@ -99,7 +99,7 @@ impl Settings {
             drawer_side: store
                 .get_setting_or("drawerSide", EdgeSide::Right)
                 .unwrap_or(EdgeSide::Right),
-            edge_zone: store.get_setting_or("edgeZone", 4.0).unwrap_or(4.0),
+            edge_zone: store.get_setting_or("edgeZone", 10.0).unwrap_or(10.0),
             start_blank: store.get_setting_or("startBlank", false).unwrap_or(false),
         }
     }

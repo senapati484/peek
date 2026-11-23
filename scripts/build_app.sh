@@ -108,7 +108,7 @@ DEV_NODE=$(echo "$MOUNT_OUT" | head -n 1 | awk '{print $1}')
 MOUNT_DIR="/Volumes/$DMG_VOLNAME"
 
 cp -R "$APP_BUNDLE" "$MOUNT_DIR/"
-ln -s /Applications "$MOUNT_DIR/Applications"
+ln -sf /Applications "$MOUNT_DIR/Applications"
 
 # Set Finder window bounds and side-by-side drag-and-drop icon positions
 osascript << EOF >/dev/null 2>&1 || true
@@ -118,12 +118,12 @@ tell application "Finder"
         set current view of container window to icon view
         set toolbar visible of container window to false
         set statusbar visible of container window to false
-        set the bounds of container window to {200, 120, 860, 500}
+        set the bounds of container window to {200, 150, 740, 480}
         set theViewOptions to the icon view options of container window
         set icon size of theViewOptions to 96
         set arrangement of theViewOptions to not arranged
-        set position of item "Peek.app" of container window to {180, 190}
-        set position of item "Applications" of container window to {480, 190}
+        set position of item "Peek.app" of container window to {150, 160}
+        set position of item "Applications" of container window to {390, 160}
         update without registering applications
         delay 1
         close
