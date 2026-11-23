@@ -541,6 +541,9 @@
       case 'profilesList':
         activeProfile = event.active || 'default';
         break;
+      case 'profileChanged':
+        activeProfile = event.name || 'default';
+        break;
       default:
         break;
     }

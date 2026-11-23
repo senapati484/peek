@@ -505,6 +505,16 @@
         profiles = event.profiles;
         activeProfile = event.active;
         break;
+      case "profileChanged":
+        activeProfile = event.name;
+        if (section === "history") {
+          send({ type: "getHistory" });
+        } else if (section === "bookmarks") {
+          send({ type: "getBookmarks" });
+        } else if (section === "notes") {
+          send({ type: "getNote" });
+        }
+        break;
       case "extensionsList":
         extensions = event.extensions;
         break;
@@ -694,7 +704,33 @@
       </nav>
     </header>
 
-        <div class="filter-wrap">
+    {#if section === 'tabs'}
+      <!-- Spaces Switcher Strip -->
+      <div class="spaces-filter-strip">
+        <button
+          class="space-filter-pill"
+          class:active={activeSpace === 'all'}
+          onclick={() => setSpace('all')}
+          type="button"
+        >
+          All
+        </button>
+        {#each SPACES as sp}
+          {@const spCount = tabs.filter(t => (tabSpaceMap[t.id] || 'personal') === sp.id).length}
+          <button
+            class="space-filter-pill"
+            class:active={activeSpace === sp.id}
+            style="--sp-color: {sp.color}"
+            onclick={() => setSpace(sp.id)}
+            type="button"
+          >
+            <span class="sp-dot" style="background: {sp.color}"></span>
+            {sp.name} <span class="sp-badge">{spCount}</span>
+          </button>
+        {/each}
+      </div>
+
+      <div class="filter-wrap">
           <div class="filter-box">
             <svg
               viewBox="0 0 16 16"
@@ -2050,65 +2086,6 @@
               <kbd>Esc</kbd> <span>Dismiss preview or close drawer</span>
             </div>
           </div>
-        {:else if section === "about"}
-          <div class="hero-brand" style="margin: 20px 0;">
-            <img
-              src="/logo.png"
-              alt="Peek"
-              class="drawer-logo"
-              style="width: 48px; height: 48px;"
-            />
-            <h2 style="margin: 10px 0 2px; font-size: 19px; font-weight: 700;">
-              Peek Browser
-            </h2>
-            <span style="font-size: 12px; color: var(--muted);"
-              >v0.1.0 • Pure Rust Native Architecture</span
-            >
-          </div>
-          <div class="card settings-card">
-            <p class="note">
-              Peek is built with zero framework bloat using direct <code
-                >tao</code
-              >
-              and <code>wry</code> bindings, native system WebViews, Brave adblock
-              engine, and an ephemeral hover preview architecture.
-            </p>
-          </div>
-          <div class="card settings-card" style="margin-top: 12px;">
-            <div class="tech-row">
-              <span>Engine</span> <strong>tao + wry (WebKit/WebView2)</strong>
-            </div>
-            <div class="tech-row">
-              <span>Database</span>
-              <strong>SQLite FTS5 + Connection Pool</strong>
-            </div>
-            <div class="tech-row">
-              <span>Adblock</span> <strong>Brave Adblock Engine (Rust)</strong>
-            </div>
-            <div class="tech-row">
-              <span>Extensions</span> <strong>Manifest V3 Host Engine</strong>
-            </div>
-          </div>
-        {/if}
-      </div>
-
-      <footer class="settings-footer">
-        <div class="footer-meta">
-          <span class="footer-brand">Peek</span>
-          <span class="footer-version">v0.1.0</span>
-        </div>
-
-        <div class="section-title" style="margin-top: 16px;">Peek Gestures & Signatures</div>
-        <div class="shortcut-list card settings-card">
-          <div class="key-row"><kbd>Space</kbd> <span>QuickLook preview hovered link (Finder style)</span></div>
-          <div class="key-row"><kbd>⇧ / ⌘ + Hover</kbd> <span>Trigger live link preview</span></div>
-          <div class="key-row"><kbd>Swipe Bar ⇄</kbd> <span>2-finger horizontal swipe top bar to switch tabs</span></div>
-          <div class="key-row"><kbd>Edge Swipe ⇥</kbd> <span>Swipe from trackpad left/right edges to open drawers</span></div>
-          <div class="key-row"><kbd>⌘ ⇧ [</kbd> <span>Toggle vertical tabs drawer</span></div>
-          <div class="key-row"><kbd>⌘ ⇧ ]</kbd> <span>Toggle settings & tools drawer</span></div>
-          <div class="key-row"><kbd>Esc</kbd> <span>Dismiss preview or close drawer</span></div>
-        </div>
-
       {:else if section === 'about'}
         <div class="about-hero">
           <img src="/logo.png" alt="Peek" class="about-logo" />

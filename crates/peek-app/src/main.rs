@@ -13,7 +13,7 @@ use tao::window::WindowBuilder;
 use app::{App, UserEvent};
 
 fn main() -> anyhow::Result<()> {
-    let p_dir = profile_dir();
+    let (profile_name, p_dir) = resolve_profile();
     std::fs::create_dir_all(&p_dir)?;
     let db_path = p_dir.join("peek.db");
     let store = Store::open(&db_path)
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
     set_app_icon();
     setup_macos_menu();
 
-    let mut app = App::new(window, proxy, store, p_dir)?;
+    let mut app = App::new(window, proxy, store, p_dir, profile_name)?;
     app.start()?;
 
     event_loop.run(move |event, _, control_flow| {
@@ -41,17 +41,63 @@ fn main() -> anyhow::Result<()> {
     });
 }
 
-fn profile_dir() -> PathBuf {
-    if let Ok(explicit) = std::env::var("PEEK_DATA_DIR") {
-        return PathBuf::from(explicit);
+fn resolve_profile() -> (String, PathBuf) {
+    let env_data_dir = std::env::var("PEEK_DATA_DIR").ok();
+    let env_profile = std::env::var("PEEK_PROFILE").ok();
+    let profiles_root = if let Some(dirs) = directories::ProjectDirs::from("dev", "Peek", "Peek") {
+        dirs.data_dir().join("profiles")
+    } else {
+        PathBuf::from(".peek").join("profiles")
+    };
+    resolve_profile_with(
+        &profiles_root,
+        env_data_dir.as_deref(),
+        env_profile.as_deref(),
+    )
+}
+
+pub fn resolve_profile_with(
+    profiles_root: &std::path::Path,
+    env_data_dir: Option<&str>,
+    env_profile: Option<&str>,
+) -> (String, PathBuf) {
+    if let Some(explicit) = env_data_dir {
+        return ("default".to_string(), PathBuf::from(explicit));
     }
-    if let Some(dirs) = directories::ProjectDirs::from("dev", "Peek", "Peek") {
-        return dirs
-            .data_dir()
-            .join("profiles")
-            .join("default");
+    let _ = std::fs::create_dir_all(profiles_root);
+
+    let active_file = profiles_root.join("active_profile");
+    let mut active_name = "default".to_string();
+
+    // Priority 1: Check environment override
+    if let Some(explicit_profile) = env_profile {
+        let clean = explicit_profile.trim();
+        if !clean.is_empty()
+            && !clean.contains('/')
+            && !clean.contains('\\')
+            && !clean.starts_with('.')
+        {
+            active_name = clean.to_string();
+        }
+    } else if let Ok(saved) = std::fs::read_to_string(&active_file) {
+        // Priority 2: Read persisted active profile from disk
+        let clean = saved.trim();
+        if !clean.is_empty()
+            && !clean.contains('/')
+            && !clean.contains('\\')
+            && !clean.starts_with('.')
+        {
+            let candidate_dir = profiles_root.join(clean);
+            if candidate_dir.exists() {
+                active_name = clean.to_string();
+            }
+        }
     }
-    PathBuf::from(".peek").join("default")
+
+    let p_dir = profiles_root.join(&active_name);
+    let _ = std::fs::create_dir_all(&p_dir);
+    let _ = std::fs::write(&active_file, &active_name);
+    (active_name, p_dir)
 }
 
 #[cfg(target_os = "macos")]
@@ -240,3 +286,52 @@ pub fn setup_macos_menu() {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn set_app_icon() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_profile_resolution_defaults_and_persists() {
+        let unique = format!("peek_test_profile_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let root = std::env::temp_dir().join(unique);
+        let _ = std::fs::remove_dir_all(&root);
+
+        // 1. Initial resolution without active_profile defaults to "default"
+        let (name1, path1) = resolve_profile_with(&root, None, None);
+        assert_eq!(name1, "default");
+        assert_eq!(path1, root.join("default"));
+        assert!(path1.exists());
+        assert_eq!(std::fs::read_to_string(root.join("active_profile")).unwrap(), "default");
+
+        // 2. Create another profile directory "Sayan" and switch active_profile
+        let sayan_dir = root.join("Sayan");
+        std::fs::create_dir_all(&sayan_dir).unwrap();
+        std::fs::write(root.join("active_profile"), "Sayan").unwrap();
+
+        // 3. Next startup resolves "Sayan"
+        let (name2, path2) = resolve_profile_with(&root, None, None);
+        assert_eq!(name2, "Sayan");
+        assert_eq!(path2, sayan_dir);
+
+        // 4. Non-existent profile in active_profile falls back to "default"
+        std::fs::write(root.join("active_profile"), "GhostProfile").unwrap();
+        let (name3, path3) = resolve_profile_with(&root, None, None);
+        assert_eq!(name3, "default");
+        assert_eq!(path3, root.join("default"));
+
+        // 5. Malicious or traversal profile names fall back to "default"
+        std::fs::write(root.join("active_profile"), "../../../etc").unwrap();
+        let (name4, path4) = resolve_profile_with(&root, None, None);
+        assert_eq!(name4, "default");
+        assert_eq!(path4, root.join("default"));
+
+        // 6. Environment override takes precedence
+        let (name5, path5) = resolve_profile_with(&root, None, Some("Work"));
+        assert_eq!(name5, "Work");
+        assert_eq!(path5, root.join("Work"));
+        assert!(path5.exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

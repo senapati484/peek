@@ -202,6 +202,7 @@ impl App {
         proxy: EventLoopProxy<UserEvent>,
         store: Store,
         profile_dir: std::path::PathBuf,
+        current_profile_name: String,
     ) -> anyhow::Result<Self> {
         let settings = Settings::load(&store);
         let engine = WryEngine::new(Arc::new(ProxyEvents {
@@ -234,11 +235,11 @@ impl App {
                 if valid {
                     bytes
                 } else {
-                    derive_profile_uuid("default")
+                    derive_profile_uuid(&current_profile_name)
                 }
             }
             _ => {
-                let uuid = derive_profile_uuid("default");
+                let uuid = derive_profile_uuid(&current_profile_name);
                 let hex_str = uuid.iter().map(|b| format!("{b:02x}")).collect::<String>();
                 let _ = store.set_setting("profileUuid", &hex_str);
                 uuid
@@ -279,7 +280,7 @@ impl App {
             profile_web_data_dir,
             profile_uuid,
             current_drawer_side,
-            current_profile_name: "default".to_string(),
+            current_profile_name,
             extensions,
             is_zen_mode: false,
         })
@@ -289,32 +290,7 @@ impl App {
         self.create_chrome()?;
         let _ = self.create_drawer_prewarm();
 
-        let stored = self.store.load_tabs()?;
-        let mut stored: Vec<peek_store::StoredTab> = stored
-            .into_iter()
-            .filter(|t| !t.url.contains("ogs.google.com") && !t.url.contains("/widget/account"))
-            .collect();
-
-        // Self-heal any tabs that had their url saved as about:blank but have a real title
-        for tab in &mut stored {
-            if (peek_core::url::is_blank(&tab.url) || tab.url.is_empty()) && !tab.title.is_empty() {
-                if let Ok(entries) = self.store.search_history(&tab.title, 1) {
-                    if let Some(entry) = entries.first() {
-                        tab.url = entry.url.clone();
-                    }
-                }
-            }
-        }
-
-        let session = self.store.load_session()?;
-        let active = session.as_ref().and_then(|s| s.active_tab);
-        let (manager, actions) = TabManager::restore(
-            self.settings.tab_config(),
-            stored,
-            active,
-        );
-        self.tabs = manager;
-        self.apply(actions);
+        self.restore_tabs_from_store()?;
 
         self.layout();
         self.window.set_visible(true);
@@ -324,6 +300,43 @@ impl App {
         self.spawn_ticker();
         self.push_tabs();
         self.send_pinned_sites();
+        self.send_profiles_list();
+        Ok(())
+    }
+
+    fn restore_tabs_from_store(&mut self) -> anyhow::Result<()> {
+        let (stored, active) = if self.settings.start_blank {
+            (Vec::new(), None)
+        } else {
+            let stored = self.store.load_tabs().unwrap_or_default();
+            let mut stored: Vec<peek_store::StoredTab> = stored
+                .into_iter()
+                .filter(|t| !t.url.contains("ogs.google.com") && !t.url.contains("/widget/account"))
+                .collect();
+
+            // Self-heal any tabs that had their url saved as about:blank but have a real title
+            for tab in &mut stored {
+                if (peek_core::url::is_blank(&tab.url) || tab.url.is_empty()) && !tab.title.is_empty() {
+                    if let Ok(entries) = self.store.search_history(&tab.title, 1) {
+                        if let Some(entry) = entries.first() {
+                            tab.url = entry.url.clone();
+                        }
+                    }
+                }
+            }
+
+            let session = self.store.load_session().unwrap_or(None);
+            let active = session.as_ref().and_then(|s| s.active_tab);
+            (stored, active)
+        };
+
+        let (manager, actions) = TabManager::restore(
+            self.settings.tab_config(),
+            stored,
+            active,
+        );
+        self.tabs = manager;
+        self.apply(actions);
         Ok(())
     }
 
@@ -765,29 +778,22 @@ impl App {
                 }
             }
             Command::GetHistory { query } => {
-                let list = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
-                    self.store.search_history(&q, 100).unwrap_or_default()
+                if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+                    let list = self.store.search_history(&q, 100).unwrap_or_default();
+                    let entries = list.into_iter().map(|h| HistoryItem {
+                        url: h.url,
+                        title: h.title,
+                        visit_count: h.visit_count,
+                        last_visit: h.last_visit,
+                    }).collect();
+                    self.send(Event::HistoryList { entries });
                 } else {
-                    self.store.recent_history(100).unwrap_or_default()
-                };
-                let entries = list.into_iter().map(|h| HistoryItem {
-                    url: h.url,
-                    title: h.title,
-                    visit_count: h.visit_count,
-                    last_visit: h.last_visit,
-                }).collect();
-                self.send(Event::HistoryList { entries });
+                    self.send_history_list();
+                }
             }
             Command::DeleteHistoryItem { url } => {
                 let _ = self.store.delete_history_url(&url);
-                let list = self.store.recent_history(100).unwrap_or_default();
-                let entries = list.into_iter().map(|h| HistoryItem {
-                    url: h.url,
-                    title: h.title,
-                    visit_count: h.visit_count,
-                    last_visit: h.last_visit,
-                }).collect();
-                self.send(Event::HistoryList { entries });
+                self.send_history_list();
                 self.send(Event::Toast { message: "History item deleted".into() });
             }
             Command::ClearHistory => {
@@ -796,19 +802,19 @@ impl App {
                 self.send(Event::Toast { message: "Browsing history cleared".into() });
             }
             Command::GetBookmarks { query } => {
-                let list = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
-                    self.store.search_bookmarks(&q, 100).unwrap_or_default()
+                if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+                    let list = self.store.search_bookmarks(&q, 100).unwrap_or_default();
+                    let bookmarks = list.into_iter().map(|b| BookmarkItem {
+                        id: b.id,
+                        url: b.url,
+                        title: b.title,
+                        favicon: b.favicon,
+                        created_at: b.created_at,
+                    }).collect();
+                    self.send(Event::BookmarksList { bookmarks });
                 } else {
-                    self.store.bookmarks().unwrap_or_default()
-                };
-                let bookmarks = list.into_iter().map(|b| BookmarkItem {
-                    id: b.id,
-                    url: b.url,
-                    title: b.title,
-                    favicon: b.favicon,
-                    created_at: b.created_at,
-                }).collect();
-                self.send(Event::BookmarksList { bookmarks });
+                    self.send_bookmarks_list();
+                }
             }
             Command::ToggleBookmark { url, title } => {
                 let clean = url.trim();
@@ -893,8 +899,7 @@ impl App {
                 let _ = self.store.set_setting("scratchpad_notes", &content);
             }
             Command::GetNote => {
-                let content = self.store.get_setting("scratchpad_notes").unwrap_or_default().unwrap_or_default();
-                self.send(Event::NoteLoaded { content });
+                self.send_note();
             }
             Command::Quit => {
                 self.shutdown();
@@ -1702,14 +1707,25 @@ impl App {
         {
             return;
         }
-        if let Some(parent) = self.profile_dir.parent() {
-            let new_dir = parent.join(clean);
-            let _ = std::fs::create_dir_all(&new_dir);
-            self.send_profiles_list();
-            self.send(Event::Toast {
-                message: format!("Profile '{clean}' created"),
-            });
+        let parent = match self.profile_dir.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return,
+        };
+        let new_dir = parent.join(clean);
+        let _ = std::fs::create_dir_all(&new_dir);
+        let _ = std::fs::create_dir_all(new_dir.join("web_data"));
+        let _ = std::fs::create_dir_all(new_dir.join("extensions"));
+        let db_path = new_dir.join("peek.db");
+        if let Ok(store) = Store::open(&db_path) {
+            let uuid = derive_profile_uuid(clean);
+            let hex_str = uuid.iter().map(|b| format!("{b:02x}")).collect::<String>();
+            let _ = store.set_setting("profileUuid", &hex_str);
+            let _ = store.seed_default_bookmarks(now_ms());
         }
+        self.send_profiles_list();
+        self.send(Event::Toast {
+            message: format!("Profile '{clean}' created"),
+        });
     }
 
     fn switch_profile(&mut self, name: &str) {
@@ -1717,25 +1733,110 @@ impl App {
         if clean.is_empty() || clean == self.current_profile_name {
             return;
         }
-        if let Some(parent) = self.profile_dir.parent() {
-            let target_dir = parent.join(clean);
-            if target_dir.exists() {
-                self.current_profile_name = clean.to_string();
-                self.profile_dir = target_dir.clone();
-                self.profile_web_data_dir = target_dir.join("web_data");
-                let _ = std::fs::create_dir_all(&self.profile_web_data_dir);
-                let uuid = derive_profile_uuid(clean);
-                self.profile_uuid = uuid;
-                self.send(Event::ProfileChanged {
-                    name: clean.to_string(),
-                });
-                self.send_profiles_list();
-                self.send_cookies_count();
-                self.send(Event::Toast {
-                    message: format!("Switched to profile '{clean}'"),
-                });
-            }
+        let parent = match self.profile_dir.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return,
+        };
+        let target_dir = parent.join(clean);
+        if !target_dir.exists() {
+            return;
         }
+
+        // 1. Save current session and state to old profile store
+        self.save_session();
+
+        // 2. Destroy old tab views and preview
+        for (_tab_id, view_id) in self.tab_views.drain() {
+            self.engine.destroy(view_id);
+        }
+        self.view_tabs.clear();
+        if let Some(pid) = self.preview_id.take() {
+            self.engine.destroy(pid);
+        }
+        self.preview = PreviewController::default();
+        self.preview_hide_at = None;
+
+        // 3. Persist active profile name to disk
+        let active_file = parent.join("active_profile");
+        let _ = std::fs::write(&active_file, clean);
+
+        // 4. Open new profile database and directories
+        let db_path = target_dir.join("peek.db");
+        let new_store = match Store::open(&db_path) {
+            Ok(s) => s,
+            Err(error) => {
+                eprintln!("peek: failed to open profile db at {}: {error}", db_path.display());
+                return;
+            }
+        };
+
+        self.store = new_store;
+        self.current_profile_name = clean.to_string();
+        self.profile_dir = target_dir.clone();
+        self.profile_web_data_dir = target_dir.join("web_data");
+        let _ = std::fs::create_dir_all(&self.profile_web_data_dir);
+
+        // 5. Derive or load profile UUID for cookie & cache partition
+        let uuid = match self.store.get_setting("profileUuid") {
+            Ok(Some(hex_str)) if hex_str.len() == 32 => {
+                let mut bytes = [0u8; 16];
+                let mut valid = true;
+                for i in 0..16 {
+                    if let Ok(b) = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16) {
+                        bytes[i] = b;
+                    } else {
+                        valid = false;
+                        break;
+                    }
+                }
+                if valid {
+                    bytes
+                } else {
+                    let u = derive_profile_uuid(clean);
+                    let hex_str = u.iter().map(|b| format!("{b:02x}")).collect::<String>();
+                    let _ = self.store.set_setting("profileUuid", &hex_str);
+                    u
+                }
+            }
+            _ => {
+                let u = derive_profile_uuid(clean);
+                let hex_str = u.iter().map(|b| format!("{b:02x}")).collect::<String>();
+                let _ = self.store.set_setting("profileUuid", &hex_str);
+                u
+            }
+        };
+        self.profile_uuid = uuid;
+
+        // 6. Reload profile settings and extensions
+        self.settings = Settings::load(&self.store);
+        self.current_drawer_side = self.settings.drawer_side;
+        let extensions_dir = self.profile_dir.join("extensions");
+        let _ = std::fs::create_dir_all(&extensions_dir);
+        self.extensions = ExtensionRegistry::load_from_dir(&extensions_dir);
+        let _ = self.store.seed_default_bookmarks(now_ms());
+
+        // 7. Restore tabs from the new profile store
+        if let Err(error) = self.restore_tabs_from_store() {
+            eprintln!("peek: error restoring tabs for profile '{clean}': {error}");
+        }
+
+        // 8. Relayout and sync UI state via IPC
+        self.layout();
+        self.send(Event::ProfileChanged {
+            name: clean.to_string(),
+        });
+        self.send_profiles_list();
+        self.push_tabs();
+        self.send_pinned_sites();
+        self.send_cookies_count();
+        self.send_extensions_list();
+        self.send_bookmarks_list();
+        self.send_history_list();
+        self.send_note();
+        self.send_settings();
+        self.send(Event::Toast {
+            message: format!("Switched to profile '{clean}'"),
+        });
     }
 
     fn delete_profile(&mut self, name: &str) {
@@ -1743,14 +1844,16 @@ impl App {
         if clean.is_empty() || clean == "default" || clean == self.current_profile_name {
             return;
         }
-        if let Some(parent) = self.profile_dir.parent() {
-            let target = parent.join(clean);
-            let _ = std::fs::remove_dir_all(target);
-            self.send_profiles_list();
-            self.send(Event::Toast {
-                message: format!("Profile '{clean}' deleted"),
-            });
-        }
+        let parent = match self.profile_dir.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return,
+        };
+        let target = parent.join(clean);
+        let _ = std::fs::remove_dir_all(target);
+        self.send_profiles_list();
+        self.send(Event::Toast {
+            message: format!("Profile '{clean}' deleted"),
+        });
     }
 
     fn send_extensions_list(&self) {
@@ -1934,6 +2037,44 @@ impl App {
         });
     }
 
+    fn send_bookmarks_list(&self) {
+        let list = self.store.bookmarks().unwrap_or_default();
+        let bookmarks = list
+            .into_iter()
+            .map(|b| BookmarkItem {
+                id: b.id,
+                url: b.url,
+                title: b.title,
+                favicon: b.favicon,
+                created_at: b.created_at,
+            })
+            .collect();
+        self.send(Event::BookmarksList { bookmarks });
+    }
+
+    fn send_history_list(&self) {
+        let list = self.store.recent_history(100).unwrap_or_default();
+        let entries = list
+            .into_iter()
+            .map(|h| HistoryItem {
+                url: h.url,
+                title: h.title,
+                visit_count: h.visit_count,
+                last_visit: h.last_visit,
+            })
+            .collect();
+        self.send(Event::HistoryList { entries });
+    }
+
+    fn send_note(&self) {
+        let content = self
+            .store
+            .get_setting("scratchpad_notes")
+            .unwrap_or_default()
+            .unwrap_or_default();
+        self.send(Event::NoteLoaded { content });
+    }
+
     fn send_adblock_state(&self) {
         let host = self
             .tabs
@@ -2041,6 +2182,10 @@ impl App {
     fn shutdown(&mut self) {
         self.running.store(false, Ordering::Relaxed);
         self.save_session();
+        if let Some(parent) = self.profile_dir.parent() {
+            let active_file = parent.join("active_profile");
+            let _ = std::fs::write(&active_file, &self.current_profile_name);
+        }
         if let Some(id) = self.drawer_id.take() {
             self.engine.destroy(id);
         }
