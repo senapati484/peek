@@ -1,3 +1,5 @@
+@import './lib/drawer/drawer-common.css';
+
 :root {
   color-scheme: light dark;
   --bg: #edf0f5;

@@ -6,601 +6,162 @@
     onEvent,
     requestState,
     send,
-    stripTrackingParams,
     type EdgeSide,
-    type HistoryItem,
     type PeekEvent,
     type PinnedSite,
     type Suggestion,
+    type SuggestionKind,
+    type TabInfo,
   } from './ipc';
+  import StartPage from './omnibar/StartPage.svelte';
+  import DockedTopBar from './omnibar/DockedTopBar.svelte';
 
-  let input = $state('');
-  let focused = $state(false);
-  let suggestions = $state<Suggestion[]>([]);
-  let selected = $state(-1);
-  let originalQuery = $state('');
-  let activeId = $state<number | null>(null);
-  let activeUrl = $state('about:blank');
-  let activeTitle = $state('');
-  let activeFavicon = $state<string | null>(null);
-  let activeAudible = $state(false);
-  let readerModeActive = $state(false);
-  let insecure = $state(false);
-  let loading = $state(false);
-  let searchEngine = $state('Google');
-  let activeProfile = $state('default');
-  let profileInitial = $derived((activeProfile[0] || 'D').toUpperCase());
-  let drawerOpen = $state(false);
-  let drawerSide = $state<EdgeSide | null>(null);
-  let suggestTimer: ReturnType<typeof setTimeout> | undefined;
-  let inputEl = $state<HTMLInputElement | null>(null);
-
-  // Toast Notifications
-  let toastMessage = $state<string | null>(null);
-  let toastTimer: ReturnType<typeof setTimeout> | undefined;
-  function triggerToast(msg: string) {
-    toastMessage = msg;
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toastMessage = null;
-    }, 2200);
-  }
-
-  function copyCleanLink() {
-    if (isBlank(activeUrl)) return;
-    const clean = stripTrackingParams(activeUrl);
-    try {
-      navigator.clipboard?.writeText(clean);
-    } catch {}
-    send({ type: 'copyCleanUrl', url: activeUrl });
-    triggerToast('Clean URL copied to clipboard');
-  }
-
-  type PaletteCommand = {
+  interface CommandItem {
     id: string;
     title: string;
-    detail: string;
-    shortcut?: string;
-    keywords: string[];
     action: () => void;
-  };
+    shortcut?: string;
+  }
 
-  const COMMANDS: PaletteCommand[] = [
-    {
-      id: 'new-tab',
-      title: 'New Tab',
-      detail: 'Open a blank tab',
-      shortcut: '⌘T',
-      keywords: ['new', 'tab', 'open', 'page'],
-      action: () => send({ type: 'newTab' }),
-    },
-    {
-      id: 'close-tab',
-      title: 'Close Active Tab',
-      detail: 'Close the current tab',
-      shortcut: '⌘W',
-      keywords: ['close', 'tab', 'kill'],
-      action: () => {
-        if (activeId != null) send({ type: 'closeTab', id: activeId });
-      },
-    },
-    {
-      id: 'dup-tab',
-      title: 'Duplicate Tab',
-      detail: 'Clone active page into a new tab',
-      shortcut: '⌘⇧D',
-      keywords: ['duplicate', 'clone', 'copy', 'tab'],
-      action: () => {
-        if (!isBlank(activeUrl)) send({ type: 'newTab', url: activeUrl });
-      },
-    },
-    {
-      id: 'clean-link',
-      title: 'Copy Clean URL',
-      detail: 'Copy URL stripped of tracking parameters',
-      shortcut: '⌘⇧C',
-      keywords: ['clean', 'link', 'url', 'copy', 'strip', 'tracking', 'utm', 'share'],
-      action: () => copyCleanLink(),
-    },
-    {
-      id: 'reader-mode',
-      title: 'Toggle Reader Mode',
-      detail: 'Distraction-free article reader view',
-      shortcut: '⌘⇧R',
-      keywords: ['reader', 'mode', 'read', 'article', 'clean', 'view', 'text'],
-      action: () => send({ type: 'toggleReaderMode' }),
-    },
-    {
-      id: 'find-page',
-      title: 'Find in Page',
-      detail: 'Open in-page search bar',
-      shortcut: '⌘F',
-      keywords: ['find', 'search', 'page', 'text', 'match'],
-      action: () => send({ type: 'findInPage', query: '', forward: true }),
-    },
-    {
-      id: 'toggle-mute',
-      title: 'Mute / Unmute Tab Audio',
-      detail: 'Toggle audio playback mute on active tab',
-      shortcut: '⌘⇧M',
-      keywords: ['mute', 'audio', 'sound', 'unmute', 'volume', 'quiet', 'music'],
-      action: () => send({ type: 'toggleMuteTab' }),
-    },
-    {
-      id: 'hibernate-others',
-      title: 'Hibernate Inactive Tabs',
-      detail: 'Free RAM by sleeping background tabs immediately',
-      shortcut: '⌘⌥H',
-      keywords: ['hibernate', 'sleep', 'ram', 'memory', 'clean', 'save', 'budget'],
-      action: () => {
-        send({ type: 'discardOtherTabs' });
-        triggerToast('Inactive background tabs hibernated');
-      },
-    },
-    {
-      id: 'open-tabs',
-      title: 'Open Tabs & Drawer',
-      detail: 'Explore live tabs and memory stats',
-      shortcut: '⌘⇧[',
-      keywords: ['tabs', 'drawer', 'list', 'left'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' }),
-    },
-    {
-      id: 'open-history',
-      title: 'Browsing History',
-      detail: 'Search and manage visited websites',
-      shortcut: '⌘Y',
-      keywords: ['history', 'recent', 'visits', 'sites', 'past'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'history' }),
-    },
-    {
-      id: 'open-bookmarks',
-      title: 'Saved Bookmarks',
-      detail: 'View and open saved bookmarks',
-      shortcut: '⌘⇧B',
-      keywords: ['bookmarks', 'saved', 'favorites', 'stars'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'bookmarks' }),
-    },
-    {
-      id: 'open-settings',
-      title: 'Settings & Tools',
-      detail: 'Configure search engine, themes, and memory budget',
-      shortcut: '⌘⇧]',
-      keywords: ['settings', 'preferences', 'options', 'tools', 'right'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'right', section: 'general' }),
-    },
-    {
-      id: 'open-adblock',
-      title: 'Adblock & Privacy',
-      detail: 'Manage tracker blocking and cookie controls',
-      keywords: ['adblock', 'privacy', 'blocking', 'shield', 'trackers'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'right', section: 'blocking' }),
-    },
-    {
-      id: 'clear-cookies',
-      title: 'Clear Cookies & Web Data',
-      detail: 'Flush profile storage and session cookies',
-      keywords: ['clear', 'cookies', 'storage', 'cache', 'data', 'reset'],
-      action: () => {
-        send({ type: 'clearCookies' });
-        triggerToast('Cookies and local storage cleared');
-      },
-    },
-    {
-      id: 'clear-history',
-      title: 'Clear Browsing History',
-      detail: 'Erase all visited pages from history',
-      keywords: ['clear', 'history', 'delete', 'erase', 'privacy'],
-      action: () => {
-        send({ type: 'clearHistory' });
-        triggerToast('Browsing history erased');
-      },
-    },
-    {
-      id: 'reload-page',
-      title: 'Reload Current Page',
-      detail: 'Refresh active tab content',
-      shortcut: '⌘R',
-      keywords: ['reload', 'refresh'],
-      action: () => send({ type: 'reload' }),
-    },
-    {
-      id: 'toggle-zen-mode',
-      title: 'Toggle Zen Mode',
-      detail: 'Ghost canvas view with auto-hiding omnibar',
-      shortcut: '⌘.',
-      keywords: ['zen', 'fullscreen', 'canvas', 'minimal', 'focus', 'ghost'],
-      action: () => send({ type: 'toggleZenMode' }),
-    },
-    {
-      id: 'toggle-dark-mode',
-      title: 'Smart Dark Mode',
-      detail: 'Instant high-contrast dark theme for current page',
-      shortcut: '⌘⇧D',
-      keywords: ['dark', 'mode', 'night', 'theme', 'invert', 'contrast'],
-      action: () => send({ type: 'toggleInvertDark' }),
-    },
-    {
-      id: 'toggle-pip',
-      title: 'Picture-in-Picture Video',
-      detail: 'Pop active video into a floating window',
-      shortcut: '⌘⇧P',
-      keywords: ['pip', 'picture', 'video', 'float', 'popout'],
-      action: () => send({ type: 'togglePiP' }),
-    },
-    {
-      id: 'copy-markdown-link',
-      title: 'Copy Markdown Link',
-      detail: 'Copy [Page Title](URL) to clipboard',
-      shortcut: '⌘⌥C',
-      keywords: ['copy', 'markdown', 'link', 'notion', 'slack', 'share'],
-      action: () => send({ type: 'copyMarkdownLink' }),
-    },
-    {
-      id: 'zoom-in',
-      title: 'Zoom In',
-      detail: 'Increase page zoom scale by 10%',
-      shortcut: '⌘+',
-      keywords: ['zoom', 'in', 'larger', 'scale', 'text'],
-      action: () => send({ type: 'zoomIn' }),
-    },
-    {
-      id: 'zoom-out',
-      title: 'Zoom Out',
-      detail: 'Decrease page zoom scale by 10%',
-      shortcut: '⌘-',
-      keywords: ['zoom', 'out', 'smaller', 'scale', 'text'],
-      action: () => send({ type: 'zoomOut' }),
-    },
-    {
-      id: 'zoom-reset',
-      title: 'Reset Zoom',
-      detail: 'Reset page zoom scale to 100%',
-      shortcut: '⌘0',
-      keywords: ['zoom', 'reset', 'default', '100%'],
-      action: () => send({ type: 'zoomReset' }),
-    },
-    {
-      id: 'open-notes',
-      title: 'Research Scratchpad Notes',
-      detail: 'Open local markdown research notepad',
-      shortcut: '⌘⇧N',
-      keywords: ['notes', 'scratchpad', 'markdown', 'write', 'ideas'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'notes' }),
-    },
-    {
-      id: 'open-spaces',
-      title: 'Spaces & Workspaces',
-      detail: 'Switch between Personal, Work, and Dev spaces',
-      shortcut: '⌘⇧S',
-      keywords: ['spaces', 'workspace', 'contexts', 'groups', 'projects'],
-      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'spaces' }),
-    },
-    {
-      id: 'quit-peek',
-      title: 'Quit Peek',
-      detail: 'Exit the browser',
-      shortcut: '⌘Q',
-      keywords: ['quit', 'exit', 'close'],
-      action: () => send({ type: 'quit' }),
-    },
-  ];
+  let input = $state('');
+  let activeUrl = $state<string | null>(null);
+  let activeTitle = $state<string | null>(null);
+  let loading = $state(false);
+  let canGoBack = $state(false);
+  let canGoForward = $state(false);
+  let suggestions = $state<Suggestion[]>([]);
+  let selected = $state(-1);
+  let focused = $state(false);
+  let inputEl = $state<HTMLInputElement | undefined>();
+  let suggestTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Zen Mode & Quick Tools State
-  let isZenMode = $state(false);
-  let invertDarkActive = $state(false);
-  let zenHovered = $state(false);
-  let zenHoverTimer: ReturnType<typeof setTimeout> | undefined;
-
-  // Pinned Websites State
   let pinnedSites = $state<PinnedSite[]>([]);
-  let showAddPinModal = $state(false);
-  let newPinUrl = $state('');
-  let newPinTitle = $state('');
+  let searchEngine = $state('Google');
+  let activeProfile = $state('default');
 
-  // Space-to-Peek on Pinned Websites
-  let hoveredPinUrl = $state<string | null>(null);
-  let hoveredPinEl = $state<HTMLElement | null>(null);
-  let isPreviewingPin = $state(false);
+  let isZenMode = $state(false);
+  let zenHovered = $state(false);
+  let readerModeActive = $state(false);
+  let invertDarkActive = $state(false);
+  let activeAudible = $state(false);
 
-  function triggerPinPreview(url: string, el: HTMLElement) {
-    if (!url || isBlank(url)) return;
-    const rect = el.getBoundingClientRect();
-    send({
-      type: 'previewLink',
-      url,
-      x: rect.left,
-      y: rect.top,
-      width: rect.width,
-      height: rect.height,
-    });
-    isPreviewingPin = true;
-  }
+  let toastMessage = $state<string | null>(null);
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function dismissPinPreview() {
-    if (isPreviewingPin) {
-      send({ type: 'hidePreview' });
-      isPreviewingPin = false;
-    }
-  }
-
-  // Tab Cycling HUD State
+  let tabsList = $state<TabInfo[]>([]);
   let showTabCyclingHud = $state(false);
   let hudTabIndex = $state(1);
   let hudTabTotal = $state(1);
   let hudTabTitle = $state('');
   let hudTimer: ReturnType<typeof setTimeout> | undefined;
 
-  let isStartPage = $derived(isBlank(activeUrl));
+  let drawerOpen = $state(false);
+  let drawerSide = $state<EdgeSide>('right');
 
-  $effect(() => {
-    if (isStartPage) {
-      send({ type: 'getHistory' });
-    }
-  });
-
-  let isCurrentUrlPinned = $derived(
-    !isBlank(activeUrl) &&
-      pinnedSites.some((p) => {
-        try {
-          const pHost = new URL(p.url).hostname.replace(/^www\./, '').toLowerCase();
-          const cHost = new URL(activeUrl).hostname.replace(/^www\./, '').toLowerCase();
-          const pPath = new URL(p.url).pathname.replace(/\/$/, '');
-          const cPath = new URL(activeUrl).pathname.replace(/\/$/, '');
-          return pHost === cHost && pPath === cPath;
-        } catch {
-          return p.url === activeUrl;
-        }
-      })
+  let isStartPage = $derived(
+    isBlank(activeUrl ?? '') ||
+    activeUrl === 'about:blank' ||
+    (activeUrl?.startsWith('peek://') ?? false),
   );
 
-  let lastBarCycle = 0;
-  function onBarWheel(event: WheelEvent) {
-    if (Math.abs(event.deltaX) > 20 && Math.abs(event.deltaY) < 18) {
-      const now = Date.now();
-      if (now - lastBarCycle < 240) return;
-      lastBarCycle = now;
-      send({ type: 'cycleTab', forward: event.deltaX > 0 });
+  let insecure = $derived(
+    !!activeUrl &&
+    !isStartPage &&
+    activeUrl.startsWith('http://'),
+  );
+
+  let isCurrentUrlPinned = $derived(
+    !!activeUrl &&
+    !isStartPage &&
+    pinnedSites.some((p) => p.url === activeUrl),
+  );
+
+  function showToast(msg: string) {
+    toastMessage = msg;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastMessage = null;
+    }, 2400);
+  }
+
+  function triggerTabCycle(forward: boolean) {
+    if (tabsList.length <= 1) return;
+    const currentIdx = tabsList.findIndex((t) => t.active);
+    const nextIdx = forward
+      ? (currentIdx + 1) % tabsList.length
+      : (currentIdx - 1 + tabsList.length) % tabsList.length;
+    const target = tabsList[nextIdx];
+    if (target) {
+      send({ type: 'switchTab', id: target.id });
+      hudTabIndex = nextIdx + 1;
+      hudTabTotal = tabsList.length;
+      hudTabTitle = target.title || displayUrl(target.url);
+      showTabCyclingHud = true;
+      if (hudTimer) clearTimeout(hudTimer);
+      hudTimer = setTimeout(() => {
+        showTabCyclingHud = false;
+      }, 1600);
     }
   }
 
-  function openBar() {
-    focused = true;
-    send({ type: 'setOmnibarOpen', open: true });
-    if (!isStartPage && activeUrl) {
-      input = activeUrl;
-    }
-    setTimeout(() => {
-      inputEl?.focus();
-      inputEl?.select();
-    }, 15);
-  }
+  let wheelAccumulatorX = 0;
+  let lastWheelTime = 0;
 
-  function closeBar(focusPage = true) {
-    if (suggestTimer) clearTimeout(suggestTimer);
-    suggestions = [];
-    selected = -1;
-    if (focused) {
-      focused = false;
-      send({ type: 'setOmnibarOpen', open: false });
-    }
-    input = isBlank(activeUrl) ? '' : displayUrl(activeUrl);
-    inputEl?.blur();
-    if (focusPage && !isStartPage) {
-      send({ type: 'focusPage' });
+  function onBarWheel(e: WheelEvent) {
+    const now = Date.now();
+    if (now - lastWheelTime > 400) wheelAccumulatorX = 0;
+    lastWheelTime = now;
+    wheelAccumulatorX += e.deltaX;
+    const THRESHOLD = 35;
+    if (wheelAccumulatorX > THRESHOLD) {
+      triggerTabCycle(true);
+      wheelAccumulatorX = 0;
+    } else if (wheelAccumulatorX < -THRESHOLD) {
+      triggerTabCycle(false);
+      wheelAccumulatorX = 0;
     }
   }
 
-  function submit(raw: string) {
-    const value = raw.trim();
-    if (!value) return;
-    send({ type: 'navigate', input: value });
-    closeBar();
-  }
+  const COMMANDS: Suggestion[] = [
+    { kind: 'command', text: '> New Tab', detail: '⌘T • Open a fresh tab', url: null, tabId: null },
+    { kind: 'command', text: '> Close Tab', detail: '⌘W • Close the active tab', url: null, tabId: null },
+    { kind: 'command', text: '> Reload Page', detail: '⌘R • Refresh current page', url: null, tabId: null },
+    { kind: 'command', text: '> Open Tabs Drawer', detail: '⌘⇧[ • View vertical tabs list', url: null, tabId: null },
+    { kind: 'command', text: '> Open Settings', detail: '⌘⇧] • Manage settings & tools', url: null, tabId: null },
+    { kind: 'command', text: '> Smart Night Mode', detail: '⌘⇧D • Soft high-contrast dark theme', url: null, tabId: null },
+    { kind: 'command', text: '> Toggle Reader Mode', detail: '⌘⇧R • Clean distraction-free view', url: null, tabId: null },
+    { kind: 'command', text: '> Zen Mode (Ghost Canvas)', detail: '⌘⇧F • Fullscreen edge-to-edge', url: null, tabId: null },
+    { kind: 'command', text: '> Copy Clean URL', detail: '⌘⇧C • Strip tracking params', url: null, tabId: null },
+    { kind: 'command', text: '> Copy Markdown Link', detail: '⌘⌥C • Copy as [Title](URL)', url: null, tabId: null },
+    { kind: 'command', text: '> Open Profiles', detail: 'Manage isolated browsing profiles', url: null, tabId: null },
+    { kind: 'command', text: '> Open History', detail: 'Browse recent web history', url: null, tabId: null },
+    { kind: 'command', text: '> Open Bookmarks', detail: 'View saved sites', url: null, tabId: null },
+    { kind: 'command', text: '> Open Scratchpad', detail: 'Quick research notes', url: null, tabId: null },
+    { kind: 'command', text: '> Clear Cookies & Storage', detail: 'Wipe current site local data', url: null, tabId: null },
+  ];
 
-  function accept(item: Suggestion) {
-    if (item.kind === 'command') {
-      const cmd = COMMANDS.find((c) => c.title === item.text);
-      if (cmd) {
-        cmd.action();
-      }
-    } else if (item.kind === 'tab' && item.tabId != null) {
-      send({ type: 'switchTab', id: item.tabId });
-    } else if (item.url) {
-      send({ type: 'navigate', input: item.url });
-    } else {
-      submit(item.text);
-    }
-    closeBar();
-  }
-
-  function label(kind: Suggestion['kind']): string {
-    switch (kind) {
-      case 'command':
-        return 'CMD';
-      case 'tab':
-        return 'Tab';
-      case 'history':
-        return 'History';
-      case 'bookmark':
-        return 'Saved';
-      default:
-        return 'Search';
-    }
-  }
-
-  function handleEvent(event: PeekEvent) {
-    switch (event.type) {
-      case 'tabsChanged': {
-        const prevActiveId = activeId;
-        const active = event.tabs.find((tab) => tab.active) ?? null;
-        activeId = active ? active.id : null;
-        if (active) {
-          activeUrl = active.url;
-          activeTitle = active.title;
-          activeFavicon = active.favicon;
-          activeAudible = active.audible;
-          insecure = active.url.startsWith('http://');
-          if (!focused) {
-            input = isBlank(active.url) ? '' : displayUrl(active.url);
-          }
-          if (isBlank(active.url)) {
-            setTimeout(() => {
-              inputEl?.focus();
-              inputEl?.select();
-            }, 30);
-          } else if (prevActiveId !== null && prevActiveId !== active.id) {
-            const idx = event.tabs.findIndex((t) => t.id === active.id) + 1;
-            hudTabIndex = idx > 0 ? idx : 1;
-            hudTabTotal = event.tabs.length;
-            hudTabTitle = active.title || displayUrl(active.url);
-            showTabCyclingHud = true;
-            if (hudTimer) clearTimeout(hudTimer);
-            hudTimer = setTimeout(() => {
-              showTabCyclingHud = false;
-            }, 750);
-          }
-        }
+  function runCommandAction(name: string) {
+    switch (name) {
+      case '> New Tab': send({ type: 'newTab' }); break;
+      case '> Close Tab':
+        const activeTab = tabsList.find((t) => t.active);
+        if (activeTab) send({ type: 'closeTab', id: activeTab.id });
         break;
-      }
-      case 'titleChanged':
-        if (event.id === activeId) {
-          activeTitle = event.title;
-        }
+      case '> Reload Page': send({ type: 'reload' }); break;
+      case '> Open Tabs Drawer': send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' }); break;
+      case '> Open Settings': send({ type: 'setDrawer', open: true, side: 'right', section: 'general' }); break;
+      case '> Smart Night Mode': send({ type: 'toggleInvertDark' }); break;
+      case '> Toggle Reader Mode': send({ type: 'toggleReaderMode' }); break;
+      case '> Zen Mode (Ghost Canvas)': send({ type: 'toggleZenMode' }); break;
+      case '> Copy Clean URL':
+        if (activeUrl) send({ type: 'copyCleanUrl', url: activeUrl });
         break;
-      case 'pinnedSitesChanged':
-        pinnedSites = event.sites;
-        break;
-      case 'loading':
-        if (event.id === activeId) {
-          loading = event.loading;
-          activeUrl = event.url;
-          insecure = event.url.startsWith('http://');
-          if (!focused) {
-            input = isBlank(event.url) ? '' : displayUrl(event.url);
-          }
-        }
-        break;
-      case 'urlChanged':
-        if (event.id === activeId) {
-          activeUrl = event.url;
-          insecure = event.url.startsWith('http://');
-          if (!focused) {
-            input = isBlank(event.url) ? '' : displayUrl(event.url);
-          }
-        }
-        break;
-      case 'readerModeState':
-        readerModeActive = event.active;
-        break;
-      case 'zenModeState':
-        isZenMode = event.active;
-        break;
-      case 'invertDarkState':
-        invertDarkActive = event.active;
-        break;
-      case 'historyList':
-        break;
-      case 'toast':
-        triggerToast(event.message);
-        break;
-      case 'suggestionsReady':
-        if (event.query === input) {
-          if (input.startsWith('>')) {
-            return;
-          }
-          const queryLower = input.trim().toLowerCase();
-          const directCmds = queryLower.length >= 2
-            ? COMMANDS.filter(
-                (c) =>
-                  c.title.toLowerCase().startsWith(queryLower) ||
-                  c.keywords.some((k) => k === queryLower)
-              ).map((c) => ({
-                kind: 'command' as const,
-                text: c.title,
-                detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
-                url: null,
-                tabId: null,
-              }))
-            : [];
-          suggestions = [...directCmds.slice(0, 2), ...event.items].slice(0, 7);
-          selected = -1;
-        }
-        break;
-      case 'focusOmnibar':
-        openBar();
-        break;
-      case 'drawerState':
-        drawerOpen = event.open;
-        drawerSide = event.open ? (event.side ?? null) : null;
-        if (event.open) closeBar(false);
-        break;
-      case 'settings':
-        searchEngine = event.searchEngine || 'Google';
-        break;
-      case 'profilesList':
-        activeProfile = event.active || 'default';
-        break;
-      case 'profileChanged':
-        activeProfile = event.name || 'default';
-        break;
-      default:
-        break;
-    }
-  }
-
-  function togglePinCurrent() {
-    if (isBlank(activeUrl)) return;
-    if (isCurrentUrlPinned) {
-      send({ type: 'unpinSite', url: activeUrl });
-    } else {
-      send({
-        type: 'pinSite',
-        url: activeUrl,
-        title: activeTitle || displayUrl(activeUrl),
-        favicon: activeFavicon || null,
-      });
-    }
-  }
-
-  function handleOpenPin(url: string) {
-    send({ type: 'navigate', input: url });
-  }
-
-  function handleUnpin(url: string, e: MouseEvent) {
-    e.stopPropagation();
-    send({ type: 'unpinSite', url });
-  }
-
-  function handleAddPinSubmit() {
-    const raw = newPinUrl.trim();
-    if (!raw) return;
-    const url = raw.includes('://') ? raw : `https://${raw}`;
-    send({
-      type: 'pinSite',
-      url,
-      title: newPinTitle.trim() || undefined,
-    });
-    newPinUrl = '';
-    newPinTitle = '';
-    showAddPinModal = false;
-  }
-
-  function domainInitial(url: string): string {
-    if (!url || isBlank(url)) return '✦';
-    try {
-      const h = new URL(url).hostname.replace(/^www\./, '');
-      return (h[0] || '✦').toUpperCase();
-    } catch {
-      return '✦';
-    }
-  }
-
-  function cleanDomain(url: string): string {
-    try {
-      return new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      return url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+      case '> Copy Markdown Link': send({ type: 'copyMarkdownLink' }); break;
+      case '> Open Profiles': send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' }); break;
+      case '> Open History': send({ type: 'setDrawer', open: true, side: 'left', section: 'history' }); break;
+      case '> Open Bookmarks': send({ type: 'setDrawer', open: true, side: 'left', section: 'bookmarks' }); break;
+      case '> Open Scratchpad': send({ type: 'setDrawer', open: true, side: 'left', section: 'notes' }); break;
+      case '> Clear Cookies & Storage': send({ type: 'clearCookies' }); break;
     }
   }
 
@@ -617,107 +178,196 @@
       const query = raw.slice(1).trim().toLowerCase();
       const matched = !query
         ? COMMANDS
-        : COMMANDS.filter(
-            (c) =>
-              c.title.toLowerCase().includes(query) ||
-              c.keywords.some((k) => k.includes(query)) ||
-              c.detail.toLowerCase().includes(query)
+        : COMMANDS.filter((c) =>
+            c.text.toLowerCase().includes(query) ||
+            c.detail?.toLowerCase().includes(query),
           );
-      suggestions = matched.slice(0, 7).map((c) => ({
-        kind: 'command',
-        text: c.title,
-        detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
-        url: null,
-        tabId: null,
-      }));
-      selected = -1;
+      suggestions = matched.slice(0, 8);
+      selected = suggestions.length > 0 ? 0 : -1;
       return;
     }
-
-    const queryLower = raw.trim().toLowerCase();
-    const directCmds = queryLower.length >= 2
-      ? COMMANDS.filter(
-          (c) =>
-            c.title.toLowerCase().startsWith(queryLower) ||
-            c.keywords.some((k) => k === queryLower)
-        ).map((c) => ({
-          kind: 'command' as const,
-          text: c.title,
-          detail: c.shortcut ? `${c.shortcut} · ${c.detail}` : c.detail,
-          url: null,
-          tabId: null,
-        }))
-      : [];
 
     suggestTimer = setTimeout(() => {
       send({ type: 'suggest', query: raw });
-      if (directCmds.length > 0 && !suggestions.some((s) => s.kind === 'command')) {
-        suggestions = [...directCmds.slice(0, 2), ...suggestions].slice(0, 7);
-      }
-    }, 75);
+    }, 80);
+  }
+
+  function accept(item: Suggestion) {
+    if (item.kind === 'command') {
+      runCommandAction(item.text);
+      focused = false;
+      suggestions = [];
+      send({ type: 'setOmnibarOpen', open: false });
+      send({ type: 'dismissSuggestions' });
+      return;
+    }
+
+    if (item.url) {
+      send({ type: 'navigate', input: item.url });
+    } else {
+      send({ type: 'navigate', input: item.text });
+    }
+    focused = false;
+    suggestions = [];
+    send({ type: 'setOmnibarOpen', open: false });
+    send({ type: 'dismissSuggestions' });
+  }
+
+  function commit() {
+    const raw = input.trim();
+    if (!raw) return;
+
+    if (selected >= 0 && selected < suggestions.length) {
+      accept(suggestions[selected]);
+      return;
+    }
+
+    if (raw.startsWith('>')) {
+      const best = suggestions[0];
+      if (best) accept(best);
+      return;
+    }
+
+    send({ type: 'navigate', input: raw });
+    focused = false;
+    suggestions = [];
+    send({ type: 'setOmnibarOpen', open: false });
+    send({ type: 'dismissSuggestions' });
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
-      inputEl?.select();
-      return;
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
-      event.preventDefault();
-      openBar();
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeBar();
-      return;
-    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      if (suggestions.length) {
-        if (selected === -1) {
-          originalQuery = input;
-        }
-        selected = (selected + 1) % suggestions.length;
-        const item = suggestions[selected];
-        if (item) {
-          input = item.url ?? item.text;
-        }
-      }
-      return;
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (suggestions.length) {
-        if (selected <= 0) {
-          selected = -1;
-          input = originalQuery;
-        } else {
-          selected = selected - 1;
-          const item = suggestions[selected];
-          if (item) {
-            input = item.url ?? item.text;
-          }
-        }
-      }
-      return;
-    }
-    if (event.key === 'Tab' && suggestions.length) {
-      event.preventDefault();
+      if (!suggestions.length) return;
       selected = (selected + 1) % suggestions.length;
-      return;
-    }
-    if (event.key === 'Enter') {
+    } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      const picked = selected >= 0 ? suggestions[selected] : undefined;
-      if (picked) accept(picked);
-      else submit(input);
+      if (!suggestions.length) return;
+      selected = (selected - 1 + suggestions.length) % suggestions.length;
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      focused = false;
+      suggestions = [];
+      send({ type: 'setOmnibarOpen', open: false });
+      send({ type: 'dismissSuggestions' });
+      send({ type: 'focusPage' });
     }
   }
 
-  function onRootClick(event: MouseEvent) {
-    if (event.target === event.currentTarget && !isStartPage) {
-      closeBar();
+  function togglePinCurrent() {
+    if (!activeUrl || isBlank(activeUrl)) return;
+    if (isCurrentUrlPinned) {
+      send({ type: 'unpinSite', url: activeUrl });
+      showToast('Website unpinned from Start Page');
+    } else {
+      send({
+        type: 'pinSite',
+        url: activeUrl,
+        title: activeTitle ?? undefined,
+      });
+      showToast('Website pinned to Start Page');
+    }
+  }
+
+  function handleOpenPin(url: string) {
+    send({ type: 'navigate', input: url });
+  }
+
+  function handleUnpin(url: string, e: MouseEvent) {
+    e.stopPropagation();
+    send({ type: 'unpinSite', url });
+    showToast('Website unpinned');
+  }
+
+  function handleAddPin(url: string, title?: string) {
+    send({
+      type: 'pinSite',
+      url,
+      title: title || undefined,
+    });
+    showToast('Website pinned');
+  }
+
+  function triggerPinPreview(url: string, el: HTMLElement) {
+    const rect = el.getBoundingClientRect();
+    send({
+      type: 'previewLink',
+      url,
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top),
+      width: 480,
+      height: 320,
+    });
+  }
+
+  function dismissPinPreview() {
+    send({ type: 'hidePreview' });
+  }
+
+  function openDrawer(side: EdgeSide, section?: string) {
+    send({ type: 'setDrawer', open: true, side, section });
+  }
+
+  function handleEvent(event: PeekEvent): void {
+    switch (event.type) {
+      case 'urlChanged':
+        activeUrl = event.url;
+        if (!focused) {
+          input = isBlank(event.url) ? '' : displayUrl(event.url);
+        }
+        break;
+      case 'titleChanged':
+        activeTitle = event.title;
+        break;
+      case 'loading':
+        loading = event.loading;
+        canGoBack = event.canGoBack;
+        canGoForward = event.canGoForward;
+        break;
+      case 'suggestionsReady':
+        if (focused && !input.startsWith('>')) {
+          suggestions = event.items;
+          selected = suggestions.length > 0 ? 0 : -1;
+        }
+        break;
+      case 'pinnedSitesChanged':
+        pinnedSites = event.sites;
+        break;
+      case 'settings':
+        searchEngine = event.searchEngine || 'Google';
+        break;
+      case 'profilesList':
+        activeProfile = event.active;
+        break;
+      case 'profileChanged':
+        activeProfile = event.name;
+        break;
+      case 'zenModeState':
+        isZenMode = event.active;
+        break;
+      case 'readerModeState':
+        readerModeActive = event.active;
+        break;
+      case 'invertDarkState':
+        invertDarkActive = event.active;
+        break;
+      case 'toast':
+        showToast(event.message);
+        break;
+      case 'tabsChanged':
+        tabsList = event.tabs;
+        const current = event.tabs.find((t) => t.id === event.active);
+        if (current) {
+          activeAudible = current.audible;
+        }
+        break;
+      case 'drawerState':
+        drawerOpen = event.open;
+        if (event.side) drawerSide = event.side;
+        break;
     }
   }
 
@@ -726,186 +376,25 @@
     requestState();
     send({ type: 'getPinnedSites' });
 
-    const syncTheme = () => {
-      const savedTheme = localStorage.getItem('peek_theme');
-      if (savedTheme === 'dark') {
-        document.documentElement.dataset.theme = 'dark';
-      } else if (savedTheme === 'light') {
-        document.documentElement.dataset.theme = 'light';
-      } else {
-        delete document.documentElement.dataset.theme;
-      }
-      const savedAccent = localStorage.getItem('peek_accent');
-      if (savedAccent) {
-        document.documentElement.dataset.accent = savedAccent;
-      }
-    };
-    syncTheme();
-    window.addEventListener('storage', syncTheme);
-
-    const onWindowKey = (event: KeyboardEvent) => {
-      const mod = event.metaKey || event.ctrlKey;
-      const key = event.key.toLowerCase();
-
-      if (mod && !event.shiftKey && !event.altKey) {
-        if (key === 'k') {
-          event.preventDefault();
-          openBar();
-          input = '> ';
-          onInput();
-          return;
-        }
-        if (key === 'l') {
-          event.preventDefault();
-          openBar();
-          return;
-        }
-        if (key === 't') {
-          event.preventDefault();
-          send({ type: 'newTab' });
-          return;
-        }
-        if (key === 'w') {
-          event.preventDefault();
-          if (activeId != null) {
-            send({ type: 'closeTab', id: activeId });
-          }
-          return;
-        }
-        if (key === 'r') {
-          event.preventDefault();
-          send({ type: 'reload' });
-          return;
-        }
-        if (key === 'f') {
-          event.preventDefault();
-          send({ type: 'findInPage', query: '', forward: true });
-          return;
-        }
-      }
-
-      if (mod && event.shiftKey && !event.altKey) {
-        if (key === 'c') {
-          event.preventDefault();
-          copyCleanLink();
-          return;
-        }
-        if (key === 'r') {
-          event.preventDefault();
-          send({ type: 'toggleReaderMode' });
-          return;
-        }
-        if (key === 'm') {
-          event.preventDefault();
-          send({ type: 'toggleMuteTab' });
-          return;
-        }
-        if (key === '[' || key === '{') {
-          event.preventDefault();
-          send({ type: 'setDrawer', open: !drawerOpen, side: 'left', section: 'tabs' });
-          return;
-        }
-        if (key === ']' || key === '}') {
-          event.preventDefault();
-          send({ type: 'setDrawer', open: !drawerOpen, side: 'right', section: 'settings' });
-          return;
-        }
-      }
-
-      if (event.key === 'Escape') {
-        if (isPreviewingPin) {
-          event.preventDefault();
-          dismissPinPreview();
-          return;
-        }
-        if (!isStartPage && focused) {
-          event.preventDefault();
-          closeBar();
-          return;
-        }
-      }
-
-      if ((event.key === ' ' || event.key === 'Spacebar') && isStartPage && !event.repeat) {
-        const activeEl = document.activeElement as HTMLElement | null;
-        const isInput = activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA';
-        if (!isInput) {
-          const pinTarget = hoveredPinEl || (activeEl?.closest('.pin-card') as HTMLElement | null);
-          const pinUrl = hoveredPinUrl || pinTarget?.getAttribute('data-preview-url');
-          if (pinTarget && pinUrl) {
-            event.preventDefault();
-            triggerPinPreview(pinUrl, pinTarget);
-            return;
-          }
-        }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        focused = true;
+        send({ type: 'setOmnibarOpen', open: true });
+        inputEl?.focus();
+        inputEl?.select();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        focused = true;
+        send({ type: 'setOmnibarOpen', open: true });
+        input = '>';
+        onInput();
+        inputEl?.focus();
       }
     };
-    window.addEventListener('keydown', onWindowKey, true);
-
-    const onWindowKeyUp = (event: KeyboardEvent) => {
-      if ((event.key === ' ' || event.key === 'Spacebar') && isPreviewingPin) {
-        dismissPinPreview();
-      }
-    };
-    window.addEventListener('keyup', onWindowKeyUp, true);
-
-    let edgeTimer: ReturnType<typeof setTimeout> | null = null;
-    let lastEdge = 0;
-
-    const onWindowMouseMove = (ev: MouseEvent) => {
-      if (drawerOpen || ev.buttons !== 0) return;
-      const zone = 10;
-      const atLeft = ev.clientX <= zone;
-      const atRight = window.innerWidth - ev.clientX <= zone;
-      if (!atLeft && !atRight) {
-        if (edgeTimer) {
-          clearTimeout(edgeTimer);
-          edgeTimer = null;
-        }
-        return;
-      }
-      if (edgeTimer) return;
-      const side: EdgeSide = atLeft ? 'left' : 'right';
-      const section = atLeft ? 'tabs' : 'settings';
-      edgeTimer = setTimeout(() => {
-        edgeTimer = null;
-        const now = Date.now();
-        if (now - lastEdge < 350) return;
-        lastEdge = now;
-        send({ type: 'setDrawer', open: true, side, section });
-      }, 60);
-    };
-
-    const onWindowMouseLeave = (ev: MouseEvent) => {
-      if (edgeTimer) {
-        clearTimeout(edgeTimer);
-        edgeTimer = null;
-      }
-      if (drawerOpen) return;
-      const zone = 12;
-      const now = Date.now();
-      if (now - lastEdge < 350) return;
-      if (ev.clientX <= zone) {
-        lastEdge = now;
-        send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-      } else if (window.innerWidth - ev.clientX <= zone) {
-        lastEdge = now;
-        send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-      }
-    };
-
-    window.addEventListener('mousemove', onWindowMouseMove, { passive: true });
-    window.addEventListener('mouseleave', onWindowMouseLeave);
-
-    if (isStartPage) {
-      setTimeout(() => inputEl?.focus(), 60);
-    }
+    window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('keydown', onWindowKey, true);
-      window.removeEventListener('keyup', onWindowKeyUp, true);
-      window.removeEventListener('storage', syncTheme);
-      window.removeEventListener('mousemove', onWindowMouseMove);
-      window.removeEventListener('mouseleave', onWindowMouseLeave);
-      if (edgeTimer) clearTimeout(edgeTimer);
+      window.removeEventListener('keydown', onKey);
     };
   });
 </script>
@@ -914,1816 +403,81 @@
   class="root"
   class:start-page={isStartPage}
   class:open={focused}
-  onclick={onRootClick}
   role="presentation"
 >
   {#if isStartPage}
-    <!-- Center Start Page Layout: Pure Minimalist Search & Pinned Speed Dial -->
-    <div class="start-center">
-      <!-- Left Corner: Quick Tabs Affordance (visible unless left drawer is open) -->
-      {#if !drawerOpen || drawerSide !== 'left'}
-        <div class="start-corner left">
-          <button
-            class="start-corner-pill"
-            title="Open Tabs (or hover left edge) • ⌘⇧["
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
-              <rect x="2" y="2.5" width="12" height="11" rx="2" stroke-width="1.3" />
-              <path d="M6 2.5v11" stroke-width="1.3" />
-            </svg>
-            <span class="corner-text">Tabs</span>
-            <kbd class="corner-kbd">⌘⇧[</kbd>
-          </button>
-        </div>
-      {/if}
-
-      <!-- Right Corner: Quick Settings & Profile Affordances (visible unless right drawer is open) -->
-      {#if !drawerOpen || drawerSide !== 'right'}
-        <div class="start-corner right">
-          <button
-            class="start-corner-pill"
-            title="Open Settings & Tools (or hover right edge) • ⌘⇧]"
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="corner-icon">
-              <circle cx="8" cy="8" r="2.5" stroke-width="1.3" />
-              <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke-width="1.3" stroke-linecap="round" />
-            </svg>
-            <span class="corner-text">Settings</span>
-            <kbd class="corner-kbd">⌘⇧]</kbd>
-          </button>
-
-          <button
-            class="start-profile-chip"
-            title={`Active Profile: ${activeProfile} (Click to switch)`}
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
-            }}
-          >
-            <span class="profile-avatar-dot">{profileInitial}</span>
-            <span class="profile-chip-name">{activeProfile}</span>
-          </button>
-        </div>
-      {/if}
-
-      <!-- Left & Right Edge Touchpoint Indicators -->
-      {#if !drawerOpen || drawerSide !== 'left'}
-        <button
-          class="edge-hover-indicator left"
-          title="Hover or click left edge to view Tabs (⌘⇧[)"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-          }}
-          onmouseenter={() => {
-            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-          }}
-          aria-label="Open Tabs Drawer"
-        >
-          <span class="edge-indicator-bar"></span>
-        </button>
-      {/if}
-
-      {#if !drawerOpen || drawerSide !== 'right'}
-        <button
-          class="edge-hover-indicator right"
-          title="Hover or click right edge to view Settings (⌘⇧])"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-          }}
-          onmouseenter={() => {
-            send({ type: 'setDrawer', open: true, side: 'right', section: 'settings' });
-          }}
-          aria-label="Open Settings Drawer"
-        >
-          <span class="edge-indicator-bar"></span>
-        </button>
-      {/if}
-
-      <div class="hero-brand">
-        <div class="hero-ambient-glow" aria-hidden="true"></div>
-        <div class="logo-wrapper">
-          <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
-        </div>
-      </div>
-
-      <div class="search-box">
-        <div class="search-input-wrap">
-          <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-            <circle cx="9" cy="9" r="5.5" stroke-width="1.7" stroke-linecap="round" />
-            <path d="M13 13L17 17" stroke-width="1.7" stroke-linecap="round" />
-          </svg>
-          <input
-            bind:this={inputEl}
-            bind:value={input}
-            oninput={onInput}
-            onkeydown={onKeydown}
-            onfocus={() => {
-              focused = true;
-              send({ type: 'setOmnibarOpen', open: true });
-            }}
-            placeholder={`Search ${searchEngine} or enter address...`}
-            spellcheck="false"
-            autocomplete="off"
-            autocapitalize="off"
-            aria-label="Address and search"
-          />
-          {#if input}
-            <button
-              class="clear-btn"
-              type="button"
-              onclick={() => {
-                input = '';
-                suggestions = [];
-                inputEl?.focus();
-              }}
-              aria-label="Clear input"
-            >
-              ×
-            </button>
-          {/if}
-        </div>
-
-        {#if suggestions.length}
-          <div class="start-suggestions" role="listbox">
-            {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
-              <button
-                class="suggest-item"
-                class:selected={index === selected}
-                role="option"
-                aria-selected={index === selected}
-                onmousedown={(event) => {
-                  event.preventDefault();
-                  accept(item);
-                }}
-              >
-                <span class="badge {item.kind}">{label(item.kind)}</span>
-                <span class="text">{item.text}</span>
-                {#if item.detail}
-                  <span class="detail">{item.detail}</span>
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-
-      <!-- Only show Pinned Sites when user is NOT actively typing and suggestions are closed -->
-      {#if !input.trim() && !suggestions.length}
-        <div class="pinned-section">
-          <div class="pinned-grid">
-            {#each pinnedSites as site (site.id)}
-              <div class="pin-card-wrap">
-                <button
-                  class="pin-card"
-                  type="button"
-                  title={`${site.title || cleanDomain(site.url)}\n${site.url}\n(Space to Peek)`}
-                  data-preview-url={site.url}
-                  onclick={() => handleOpenPin(site.url)}
-                  onmouseenter={(e) => {
-                    hoveredPinUrl = site.url;
-                    hoveredPinEl = e.currentTarget;
-                    if (e.shiftKey) triggerPinPreview(site.url, e.currentTarget);
-                  }}
-                  onmouseleave={() => {
-                    hoveredPinUrl = null;
-                    hoveredPinEl = null;
-                    dismissPinPreview();
-                  }}
-                >
-                  <div class="pin-icon-box">
-                    {#if site.favicon}
-                      <img
-                        src={site.favicon}
-                        alt=""
-                        class="pin-favicon"
-                        onerror={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                      />
-                    {:else}
-                      <span class="pin-initial">{domainInitial(site.url)}</span>
-                    {/if}
-                  </div>
-                  <span class="pin-title">{site.title || cleanDomain(site.url)}</span>
-                </button>
-                <button
-                  class="pin-remove-btn"
-                  type="button"
-                  title={`Unpin ${site.title || site.url}`}
-                  onclick={(e) => handleUnpin(site.url, e)}
-                  aria-label={`Unpin ${site.title || site.url}`}
-                >
-                  ×
-                </button>
-              </div>
-            {/each}
-
-            <!-- Add Pin Button -->
-            <button
-              class="pin-card add-pin-card"
-              type="button"
-              title="Pin a website"
-              onclick={() => { showAddPinModal = true; }}
-            >
-              <div class="pin-icon-box add-box">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="add-icon">
-                  <path d="M8 3.5v9M3.5 8h9" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <span class="pin-title">Add Pin</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Minimalist Keyboard & Gesture Affordances -->
-        <div class="start-hints-row" aria-label="Shortcuts and Gestures">
-          <span class="start-hint-pill" title="Press ⌘K or type > for Command Palette">
-            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">K</kbd> Commands
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill">
-            <kbd class="start-kbd">⌘</kbd><kbd class="start-kbd">L</kbd> Search
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Press Space or hold Shift while hovering any link to preview without opening a tab">
-            <kbd class="start-kbd">Space</kbd> Link Peek
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Swipe two fingers horizontally on the top bar to switch tabs">
-            <span class="start-hint-icon">⇄</span> Swipe to Switch
-          </span>
-          <span class="start-hint-dot">•</span>
-          <span class="start-hint-pill" title="Swipe from left/right screen edges to open drawers">
-            <span class="start-hint-icon">⇥</span> Edge Drawers
-          </span>
-        </div>
-      {/if}
-
-      {#if showAddPinModal}
-        <div
-          class="pin-modal-backdrop"
-          onclick={(e) => { if (e.target === e.currentTarget) showAddPinModal = false; }}
-          role="presentation"
-        >
-          <div
-            class="pin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-            tabindex="-1"
-            onkeydown={(e) => { if (e.key === 'Escape') showAddPinModal = false; }}
-          >
-            <div class="modal-header">
-              <h3 id="modal-title" class="modal-title">Pin Website</h3>
-              <button class="modal-close-btn" type="button" onclick={() => { showAddPinModal = false; }}>×</button>
-            </div>
-            <form onsubmit={(e) => { e.preventDefault(); handleAddPinSubmit(); }} class="modal-form">
-              <label class="modal-label">
-                <span>Website URL</span>
-                <input
-                  type="text"
-                  placeholder="https://example.com"
-                  bind:value={newPinUrl}
-                  class="modal-input"
-                  required
-                />
-              </label>
-              <label class="modal-label">
-                <span>Display Name (optional)</span>
-                <input
-                  type="text"
-                  placeholder="Example"
-                  bind:value={newPinTitle}
-                  class="modal-input"
-                />
-              </label>
-              <div class="modal-actions">
-                <button type="button" class="btn secondary" onclick={() => { showAddPinModal = false; }}>Cancel</button>
-                <button type="submit" class="btn primary">Pin Website</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      {/if}
-    </div>
+    <StartPage
+      {searchEngine}
+      {activeProfile}
+      {drawerOpen}
+      {drawerSide}
+      {pinnedSites}
+      bind:input
+      bind:focused
+      {suggestions}
+      {selected}
+      bind:inputEl
+      {onInput}
+      {onKeydown}
+      onFocus={() => {
+        focused = true;
+        send({ type: 'setOmnibarOpen', open: true });
+      }}
+      onAcceptSuggestion={accept}
+      onOpenPin={handleOpenPin}
+      onUnpin={handleUnpin}
+      onAddPin={handleAddPin}
+      {triggerPinPreview}
+      {dismissPinPreview}
+      onOpenDrawer={openDrawer}
+    />
   {:else}
-    <!-- Docked Minimalist Top Bar -->
-    {#if isZenMode && !zenHovered && !focused}
-      <div
-        class="zen-hover-trigger"
-        role="presentation"
-        aria-hidden="true"
-        onmouseenter={() => {
-          zenHovered = true;
-        }}
-      ></div>
-    {/if}
-    <div
-      class="bar-container"
-      role="toolbar"
-      tabindex="-1"
-      aria-label="Address bar"
-      class:zen-mode={isZenMode}
-      class:zen-revealed={zenHovered || focused}
-      onmouseenter={() => {
-        if (zenHoverTimer) clearTimeout(zenHoverTimer);
-        zenHovered = true;
+    <DockedTopBar
+      {isZenMode}
+      bind:zenHovered
+      bind:focused
+      {loading}
+      {insecure}
+      bind:input
+      {activeUrl}
+      bind:inputEl
+      {invertDarkActive}
+      {readerModeActive}
+      {activeAudible}
+      {isCurrentUrlPinned}
+      {activeProfile}
+      {toastMessage}
+      {showTabCyclingHud}
+      {hudTabIndex}
+      {hudTabTotal}
+      {hudTabTitle}
+      {suggestions}
+      {selected}
+      {onInput}
+      {onKeydown}
+      onFocus={() => {
+        focused = true;
+        send({ type: 'setOmnibarOpen', open: true });
       }}
-      onmouseleave={() => {
-        zenHoverTimer = setTimeout(() => {
-          zenHovered = false;
-        }, 280);
-      }}
-    >
-      <div class="bar" onwheel={onBarWheel} title="Swipe horizontally with 2 fingers to cycle tabs">
-        <!-- Logo / Tabs Drawer Trigger -->
-        <button
-          class="logo-btn"
-          title="Open Tabs (Cmd+Shift+[)"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'left', section: 'tabs' });
-          }}
-        >
-          <img src="/logo.png" alt="Peek" class="bar-logo" />
-        </button>
-
-        <!-- Navigation Chevrons -->
-        <button
-          class="nav-btn"
-          title="Back (Alt+Left)"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'back' });
-          }}
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
-            <path d="M10 3.5L5.5 8L10 12.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-        <button
-          class="nav-btn"
-          title="Forward (Alt+Right)"
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'forward' });
-          }}
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
-            <path d="M6 3.5L10.5 8L6 12.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-        <button
-          class="nav-btn reload-btn"
-          title={loading ? "Stop Loading" : "Reload (Cmd+R)"}
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: loading ? 'stop' : 'reload' });
-          }}
-        >
-          {#if loading}
-            <span class="spinner" aria-hidden="true"></span>
-          {:else}
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="nav-icon">
-              <path d="M13.5 8A5.5 5.5 0 1 1 12 4.1L13.5 2.5V6.5H9.5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          {/if}
-        </button>
-
-        <!-- Security Lock Indicator -->
-        {#if insecure}
-          <span class="lock-pill insecure" title="Connection is not secure (HTTP)" aria-label="Not secure">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="lock-icon">
-              <path d="M8 3.5v5M8 11.5v.5" stroke-width="1.8" stroke-linecap="round" />
-              <circle cx="8" cy="8" r="6.5" stroke-width="1.4" />
-            </svg>
-          </span>
-        {:else}
-          <span class="lock-pill secure" title="Connection is secure (HTTPS)" aria-label="Secure">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="lock-icon">
-              <path d="M4.5 7V4.5a3.5 3.5 0 0 1 7 0V7M3.5 7h9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-5A1.5 1.5 0 0 1 3.5 7z" stroke-width="1.4" />
-            </svg>
-          </span>
-        {/if}
-
-        <!-- Main Input Field -->
-        <input
-          bind:this={inputEl}
-          bind:value={input}
-          oninput={onInput}
-          onkeydown={onKeydown}
-          onfocus={() => {
-            focused = true;
-            send({ type: 'setOmnibarOpen', open: true });
-            if (activeUrl && !isBlank(activeUrl)) {
-              input = activeUrl;
-            }
-          }}
-          placeholder="Search or enter address"
-          spellcheck="false"
-          autocomplete="off"
-          autocapitalize="off"
-          aria-label="Address and search"
-        />
-
-        {#if input && focused}
-          <button
-            class="bar-clear-btn"
-            type="button"
-            onclick={() => {
-              input = '';
-              suggestions = [];
-              inputEl?.focus();
-            }}
-            title="Clear"
-          >
-            ×
-          </button>
-        {/if}
-
-        {#if !isStartPage}
-          <!-- Smart Night Mode Toggle (Calibrated Soft Dark Theme) -->
-          <button
-            class="tool-btn dark-mode-btn"
-            class:active-dark={invertDarkActive}
-            title={invertDarkActive ? "Night Mode Active (Click to disable)" : "Smart Night Mode (⌘⇧D)"}
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'toggleInvertDark' });
-            }}
-            aria-label="Smart Night Mode"
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
-              <path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-
-          <!-- Reader Mode Button -->
-          <button
-            class="tool-btn reader-btn"
-            class:active-reader={readerModeActive}
-            title="Toggle Reader Mode (⌘⇧R)"
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'toggleReaderMode' });
-            }}
-            aria-label="Reader Mode"
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
-              <path d="M2.5 3.5A2 2 0 0 1 4.5 2h7a2 2 0 0 1 2 2v9.5l-4-2-4 2V3.5z" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5.5 5.5h5M5.5 8h3.5" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-          </button>
-
-          <!-- Audio Equalizer / Mute Button -->
-          {#if activeAudible}
-            <button
-              class="tool-btn audio-btn"
-              title="Mute / Unmute Audio (⌘⇧M)"
-              type="button"
-              onclick={(e) => {
-                e.stopPropagation();
-                send({ type: 'toggleMuteTab' });
-              }}
-              aria-label="Mute / Unmute Audio"
-            >
-              <span class="audio-waves" aria-hidden="true">
-                <span class="wave-bar b1"></span>
-                <span class="wave-bar b2"></span>
-                <span class="wave-bar b3"></span>
-              </span>
-            </button>
-          {/if}
-
-          <!-- Pin Website Button -->
-          <button
-            class="tool-btn pin-btn"
-            class:pinned={isCurrentUrlPinned}
-            title={isCurrentUrlPinned ? "Unpin Website" : "Pin Website"}
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              togglePinCurrent();
-            }}
-            aria-label="Pin or Unpin Website"
-          >
-            <svg viewBox="0 0 16 16" fill={isCurrentUrlPinned ? "currentColor" : "none"} stroke="currentColor" class="tool-icon pin-icon">
-              <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.909-1.316.812-.097-.097.617-1.121.812-1.316l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
-        {/if}
-
-        <!-- Profile Button (Always visible) -->
-        <button
-          class="tool-btn profile-btn"
-          title={`Profile: ${activeProfile} (Click to manage)`}
-          type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            send({ type: 'setDrawer', open: true, side: 'right', section: 'profiles' });
-          }}
-          aria-label="Manage Profiles"
-        >
-          <span class="profile-avatar-pill">{profileInitial}</span>
-        </button>
-
-        {#if isStartPage}
-          <!-- Settings Button (Visible on New Tab page) -->
-          <button
-            class="tool-btn settings-btn"
-            title="Settings (Cmd+Shift+])"
-            type="button"
-            onclick={(e) => {
-              e.stopPropagation();
-              send({ type: 'setDrawer', open: true, side: 'right', section: 'general' });
-            }}
-            aria-label="Settings"
-          >
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" class="tool-icon gear-icon">
-              <circle cx="10" cy="10" r="3" stroke-width="1.6" />
-              <path
-                d="M10 2.5V4.5M10 15.5V17.5M2.5 10H4.5M15.5 10H17.5M4.7 4.7L6.1 6.1M13.9 13.9L15.3 15.3M4.7 15.3L6.1 13.9M13.9 6.1L15.3 4.7"
-                stroke-width="1.6"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        {/if}
-      </div>
-
-      <!-- Inline Bar Toast Feedback Pill (100% visible inside top bar!) -->
-      {#if toastMessage}
-        <div class="bar-toast-pill" role="status" aria-live="polite">
-          <span class="bar-toast-dot"></span>
-          <span class="bar-toast-text">{toastMessage}</span>
-        </div>
-      {/if}
-
-      <!-- Inline Bar Tab Cycling HUD -->
-      {#if showTabCyclingHud && !isStartPage}
-        <div class="bar-tab-hud-pill" role="status" aria-live="polite">
-          <span class="tab-hud-badge">Tab {hudTabIndex} of {hudTabTotal}</span>
-          <span class="tab-hud-title">{hudTabTitle}</span>
-        </div>
-      {/if}
-
-      <!-- Docked Suggestions Dropdown -->
-      {#if focused && suggestions.length}
-        <div class="panel" role="listbox">
-          {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
-            <button
-              class="item"
-              class:selected={index === selected}
-              role="option"
-              aria-selected={index === selected}
-              onmousedown={(event) => {
-                event.preventDefault();
-                accept(item);
-              }}
-            >
-              <span class="badge {item.kind}">{label(item.kind)}</span>
-              <span class="text">{item.text}</span>
-              {#if item.detail}
-                <span class="detail">{item.detail}</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
+      {onBarWheel}
+      onAcceptSuggestion={accept}
+      onTogglePin={togglePinCurrent}
+      onOpenDrawer={openDrawer}
+    />
   {/if}
 </div>
 
 <style>
   .root {
-    width: 100vw;
-    height: 100vh;
-    box-sizing: border-box;
-    pointer-events: none;
-  }
-
-  .root.start-page,
-  .root.open {
-    pointer-events: auto;
-  }
-
-  /* Center Start Page Layout */
-  .start-center {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    padding: 32px 24px;
-    background: var(--bg);
-    animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  /* Corner Affordances: Tabs (Left) and Settings & Profile (Right) */
-  .start-corner {
-    position: absolute;
-    top: 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    z-index: 20;
-    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .start-corner.left {
-    left: 24px;
-  }
-
-  .start-corner.right {
-    right: 24px;
-  }
-
-  .start-corner-pill {
-    all: unset;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 12px 5px 10px;
-    border-radius: 9999px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.16s ease;
-  }
-
-  .start-corner-pill:hover {
-    background: var(--hover);
-    color: var(--text);
-    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-    transform: translateY(-1px);
-    box-shadow: var(--shadow);
-  }
-
-  .corner-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--muted);
-    transition: color 0.15s ease;
-  }
-
-  .start-corner-pill:hover .corner-icon {
-    color: var(--accent);
-  }
-
-  .corner-text {
-    letter-spacing: -0.01em;
-  }
-
-  .corner-kbd {
-    all: unset;
-    font-size: 10px;
-    font-weight: 600;
-    font-family: inherit;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    color: var(--muted);
-    border: 1px solid var(--border-subtle);
-    margin-left: 2px;
-    letter-spacing: 0.02em;
-  }
-
-  .start-corner-pill:hover .corner-kbd {
-    color: var(--text);
-    border-color: var(--border);
-  }
-
-  .start-profile-chip {
-    all: unset;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 4px 11px 4px 5px;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--panel) 75%, transparent);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition: all 0.15s ease;
-  }
-
-  .start-profile-chip:hover {
-    background: var(--hover);
-    color: var(--text);
-    border-color: var(--accent);
-  }
-
-  .profile-avatar-dot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #ffffff;
-    font-size: 10.5px;
-    font-weight: 700;
-  }
-
-  .profile-chip-name {
-    letter-spacing: -0.01em;
-  }
-
-  /* Edge touchpoint indicators */
-  .edge-hover-indicator {
-    all: unset;
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 25;
-    opacity: 0.45;
-    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .edge-hover-indicator.left {
-    left: 4px;
-  }
-
-  .edge-hover-indicator.right {
-    right: 4px;
-  }
-
-  .edge-hover-indicator:hover {
-    opacity: 1;
-    transform: translateY(-50%) scale(1.2);
-  }
-
-  .edge-indicator-bar {
-    width: 3.5px;
-    height: 100%;
-    border-radius: 9999px;
-    background: var(--border);
-    transition: background 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .edge-hover-indicator:hover .edge-indicator-bar {
-    background: var(--accent);
-    box-shadow: 0 0 10px var(--accent-glow);
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(8px) scale(0.99);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  .hero-brand {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 24px;
-  }
-
-  .hero-ambient-glow {
-    position: absolute;
-    width: 260px;
-    height: 260px;
-    border-radius: 50%;
-    background: radial-gradient(circle, var(--accent-glow, rgba(59, 130, 246, 0.22)) 0%, transparent 70%);
-    filter: blur(48px);
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.65;
-    animation: ambientPulse 6s ease-in-out infinite alternate;
-  }
-
-  @keyframes ambientPulse {
-    0% { transform: scale(0.9); opacity: 0.45; }
-    100% { transform: scale(1.15); opacity: 0.75; }
-  }
-
-  .logo-wrapper {
-    position: relative;
-    margin-bottom: 0;
-  }
-
-  .hero-logo {
-    position: relative;
-    width: 72px;
-    height: 72px;
-    display: block;
-    user-select: none;
-    -webkit-user-drag: none;
-    filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 24px var(--accent-glow));
-    z-index: 1;
-    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .hero-logo:hover {
-    transform: scale(1.06);
-  }
-
-  /* Sleek, Prominent Responsive Search Box */
-  .search-box {
     width: 100%;
-    max-width: min(620px, calc(100vw - 48px));
+    height: 100%;
     position: relative;
-    z-index: 100;
-    border-radius: 9999px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg), 0 2px 8px rgba(15, 23, 42, 0.04);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+    user-select: none;
   }
 
-  .search-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-lg);
-    background: var(--panel);
-    transform: translateY(-1px);
-  }
-
-  .search-input-wrap {
-    display: flex;
-    align-items: center;
-    height: 48px;
-    padding: 0 18px;
-    gap: 12px;
-    border-radius: 9999px;
-  }
-
-  .search-icon {
-    width: 17px;
-    height: 17px;
-    color: var(--muted);
-    flex-shrink: 0;
-    transition: color 0.15s ease;
-  }
-
-  .search-box:focus-within .search-icon {
-    color: var(--accent);
-  }
-
-  .search-input-wrap input {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 450;
-    letter-spacing: -0.01em;
-  }
-
-  .clear-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .clear-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .start-suggestions {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    right: 0;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--panel);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    z-index: 1000;
-    max-height: 380px;
+  .root.start-page {
     overflow-y: auto;
-    animation: dropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @keyframes dropdownFade {
-    from {
-      opacity: 0;
-      transform: translateY(-6px) scale(0.995);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  .suggest-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 9px 13px;
-    border-radius: 10px;
-    text-align: left;
-    font-size: 13.5px;
-    cursor: pointer;
-    transition: background 0.12s ease;
-    border: none;
-    background: transparent;
-  }
-
-  .suggest-item.selected,
-  .suggest-item:hover {
-    background: var(--hover);
-  }
-
-  /* Pinned Websites Speed Dial Section */
-  .pinned-section {
-    width: 100%;
-    max-width: min(620px, calc(100vw - 48px));
-    margin-top: 24px;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: center;
-    user-select: none;
-    animation: fadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .pinned-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 12px 8px;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .pin-card-wrap {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .pin-card {
-    all: unset;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    cursor: pointer;
-    padding: 8px 4px 6px;
-    border-radius: 12px;
-    transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease;
-  }
-
-  .pin-card:hover {
-    background: color-mix(in srgb, var(--surface) 60%, transparent);
-    transform: translateY(-2px);
-  }
-
-  .pin-card:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    background: color-mix(in srgb, var(--surface) 80%, transparent);
-    transform: translateY(-2px);
-  }
-
-  .pin-icon-box {
-    width: 48px;
-    height: 48px;
-    border-radius: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .pin-card:hover .pin-icon-box {
-    box-shadow: var(--shadow), 0 0 0 1px var(--accent-glow);
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-    transform: scale(1.05);
-  }
-
-  .pin-favicon {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-    object-fit: contain;
-  }
-
-  .pin-initial {
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--accent);
-  }
-
-  .pin-title {
-    font-size: 11.5px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    max-width: 80px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-    letter-spacing: -0.01em;
-    transition: color 0.14s ease;
-  }
-
-  .pin-card:hover .pin-title {
-    color: var(--text);
-  }
-
-  .pin-remove-btn {
-    all: unset;
-    position: absolute;
-    top: 2px;
-    right: 12px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--panel) 90%, black);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0;
-    transform: scale(0.85);
-    transition: all 0.15s ease;
-    z-index: 5;
-  }
-
-  .pin-card-wrap:hover .pin-remove-btn {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  .pin-remove-btn:hover {
-    background: #ef4444;
-    border-color: #ef4444;
-    color: #ffffff;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-  }
-
-  .add-pin-card:hover .add-box {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-  }
-
-  .add-icon {
-    width: 18px;
-    height: 18px;
-    color: var(--muted);
-    transition: color 0.15s ease;
-  }
-
-  .add-pin-card:hover .add-icon {
-    color: var(--accent);
-  }
-
-  /* Minimalist Keyboard & Gesture Affordances */
-  .start-hints-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 24px;
-    user-select: none;
-    pointer-events: auto;
-    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .start-hint-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
-    color: var(--muted);
-    letter-spacing: -0.01em;
-    padding: 3px 6px;
-    border-radius: 6px;
-    transition: color 0.15s ease;
-  }
-
-  .start-hint-pill:hover {
-    color: var(--text-secondary);
-  }
-
-  .start-kbd {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", inherit;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1.5px 5.5px;
-    box-shadow: var(--shadow-sm);
-    line-height: 1.2;
-  }
-
-  .start-hint-dot {
-    font-size: 10px;
-    color: var(--border);
-    user-select: none;
-  }
-
-  .start-hint-icon {
-    font-size: 12px;
-    opacity: 0.85;
-  }
-
-  /* Add Pin Modal */
-  .pin-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    animation: fadeIn 0.16s ease;
-  }
-
-  .pin-modal {
-    width: 100%;
-    max-width: 360px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.05);
-    padding: 20px 22px;
-    animation: dropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
-
-  .modal-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0;
-  }
-
-  .modal-close-btn {
-    all: unset;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    color: var(--muted);
-    border-radius: 4px;
-    padding: 2px 6px;
-    transition: color 0.12s ease;
-  }
-
-  .modal-close-btn:hover {
-    color: var(--text);
-  }
-
-  .modal-form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .modal-label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-
-  .modal-input {
-    all: unset;
-    box-sizing: border-box;
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 8px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 13px;
-    transition: border-color 0.14s ease, box-shadow 0.14s ease;
-  }
-
-  .modal-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft);
-  }
-
-  .modal-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 6px;
-  }
-
-  .modal-actions .btn {
-    all: unset;
-    cursor: pointer;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: 550;
-    transition: all 0.14s ease;
-  }
-
-  .modal-actions .btn.secondary {
-    color: var(--text-secondary);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-  }
-
-  .modal-actions .btn.secondary:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .modal-actions .btn.primary {
-    background: var(--accent);
-    color: #ffffff;
-    box-shadow: 0 2px 8px var(--accent-glow);
-  }
-
-  .modal-actions .btn.primary:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-  }
-
-  /* Docked Top Bar: Clean Full-Width Toolbar */
-  .bar-container {
-    position: relative;
-    width: 100%;
-    height: 100%;
     background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 14px;
-    box-sizing: border-box;
-    pointer-events: auto;
-  }
-
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: clamp(32px, calc(100% - 10px), 38px);
-    width: 100%;
-    margin: 0;
-    padding: 0 12px;
-    border: 1px solid var(--border);
-    border-radius: 9999px;
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    transition: all 0.15s ease;
-  }
-
-  .bar:focus-within {
-    background: var(--panel);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft);
-  }
-
-  .logo-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    padding: 2px;
-    margin-right: 2px;
-    border-radius: 4px;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  .logo-btn:hover {
-    transform: scale(1.08);
-    opacity: 0.9;
-  }
-
-  .bar-logo {
-    width: 17px;
-    height: 17px;
-    display: block;
-    user-select: none;
-    -webkit-user-drag: none;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-  }
-
-  .nav-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    color: var(--muted);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background 0.12s ease, color 0.12s ease;
-  }
-
-  .nav-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .nav-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  .reload-btn {
-    margin-right: 2px;
-  }
-
-  .lock-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
-  .lock-pill.secure {
-    color: #10b981;
-  }
-
-  .lock-pill.insecure {
-    color: #f59e0b;
-  }
-
-  .lock-icon {
-    width: 13px;
-    height: 13px;
-  }
-
-  .bar input {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 450;
-    letter-spacing: -0.005em;
-    padding: 0 6px;
-  }
-
-  .bar input::placeholder {
-    color: var(--muted);
-  }
-
-  .bar-clear-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    color: var(--muted);
-    font-size: 14px;
-    cursor: pointer;
-    flex-shrink: 0;
-    margin-right: 4px;
-  }
-
-  .bar-clear-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .tool-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    color: var(--muted);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
-  }
-
-  .tool-btn:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .tool-icon {
-    width: 15px;
-    height: 15px;
-  }
-
-  .dark-mode-btn.active-dark {
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.15);
-  }
-
-  .zen-btn.active-zen {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-
-  /* Zen Mode Floating Island */
-  .zen-hover-trigger {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 12px;
-    z-index: 9998;
-    pointer-events: auto;
-  }
-
-  .bar-container.zen-mode {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    background: transparent;
-    border-bottom: none;
-    transform: translateY(-100%);
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
-  }
-
-  .bar-container.zen-mode.zen-revealed {
-    transform: translateY(0);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .bar-container.zen-mode .bar {
-    max-width: min(840px, calc(100vw - 32px));
-    margin: 6px auto 0;
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    background: color-mix(in srgb, var(--panel) 92%, #000);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-  }
-
-  .pin-btn.pinned {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-
-  .pin-btn.pinned:hover {
-    color: var(--accent);
-    filter: brightness(1.15);
-  }
-
-  .pin-icon {
-    width: 13px;
-    height: 13px;
-    transition: transform 0.14s ease;
-  }
-
-  .pin-btn:hover .pin-icon {
-    transform: scale(1.1);
-  }
-
-  .profile-btn {
-    all: unset;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 1px;
-    border-radius: 50%;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  .profile-btn:hover {
-    transform: scale(1.08);
-    opacity: 0.9;
-  }
-
-  .profile-avatar-pill {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 19px;
-    height: 19px;
-    border-radius: 50%;
-    background: #3b82f6;
-    color: #ffffff;
-    font-size: 10.5px;
-    font-weight: 700;
-  }
-
-  .tool-icon {
-    width: 13.5px;
-    height: 13.5px;
-  }
-
-  .shield-btn:hover {
-    color: var(--accent);
-  }
-
-  .spinner {
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Docked Panel Dropdown */
-  .panel {
-    position: absolute;
-    top: 38px;
-    left: 10px;
-    right: 10px;
-    max-height: 280px;
-    margin: 0;
-    padding: 4px;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: color-mix(in srgb, var(--panel) 96%, transparent);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    animation: panelPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @keyframes panelPop {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 7px 9px;
-    border-radius: 7px;
-    text-align: left;
-    font-size: 12.5px;
-    cursor: pointer;
-    transition: background 0.1s ease;
-  }
-
-  .item.selected,
-  .item:hover {
-    background: var(--hover);
-  }
-
-  .badge {
-    flex: 0 0 auto;
-    min-width: 52px;
-    color: var(--muted);
-    font-size: 9.5px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 5px;
-    background: var(--surface-2);
-    text-align: center;
-  }
-
-  .badge.tab {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-
-  .badge.bookmark {
-    color: #a855f7;
-    background: color-mix(in srgb, #a855f7 18%, transparent);
-  }
-
-  .badge.history {
-    color: var(--muted);
-    background: var(--surface-2);
-  }
-
-  .badge.search {
-    color: #10b981;
-    background: color-mix(in srgb, #10b981 18%, transparent);
-  }
-
-  .badge.command {
-    color: #c084fc;
-    background: color-mix(in srgb, #a855f7 22%, transparent);
-  }
-
-  .tool-btn.reader-btn.active-reader {
-    color: #38bdf8;
-    background: rgba(56, 189, 248, 0.16);
-  }
-
-  .audio-btn {
-    padding: 0 4px;
-    background: color-mix(in srgb, var(--accent) 15%, transparent);
-    border-radius: 4px;
-  }
-
-  .audio-waves {
-    display: inline-flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 11px;
-  }
-
-  .wave-bar {
-    width: 2px;
-    background: var(--accent);
-    border-radius: 1px;
-    animation: waveEqualizer 0.7s ease-in-out infinite alternate;
-  }
-
-  .wave-bar.b1 { height: 4px; animation-delay: 0.1s; }
-  .wave-bar.b2 { height: 11px; animation-delay: 0.25s; }
-  .wave-bar.b3 { height: 7px; animation-delay: 0.18s; }
-
-  @keyframes waveEqualizer {
-    0% { height: 2px; }
-    100% { height: 11px; }
-  }
-
-  /* Inline Feedback Toast Pill (Never clipped by 36px top bar!) */
-  .bar-toast-pill {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    height: 24px;
-    max-width: min(480px, calc(100vw - 220px));
-    padding: 0 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    background: color-mix(in srgb, var(--panel) 94%, #000);
-    border: 1px solid var(--border);
-    border-radius: 9999px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    z-index: 1000;
-    pointer-events: none;
-    animation: barPillEnter 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  @keyframes barPillEnter {
-    from {
-      opacity: 0;
-      transform: translate(-50%, calc(-50% - 5px)) scale(0.96);
-    }
-    to {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-  }
-
-  .bar-toast-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #10b981;
-    box-shadow: 0 0 7px #10b981;
-    flex-shrink: 0;
-  }
-
-  .bar-toast-text {
-    font-size: 11.5px;
-    color: var(--text);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* Inline Tab HUD Pill */
-  .bar-tab-hud-pill {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    height: 24px;
-    max-width: min(480px, calc(100vw - 220px));
-    padding: 0 10px 0 4px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    background: color-mix(in srgb, var(--panel) 94%, #000);
-    border: 1px solid var(--border);
-    border-radius: 9999px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    z-index: 1000;
-    pointer-events: none;
-    animation: barPillEnter 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  /* Night Mode Active State Styling */
-  .dark-mode-btn.active-dark {
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.16);
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.22);
   }
 </style>
