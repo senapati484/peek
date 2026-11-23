@@ -193,6 +193,7 @@ pub struct App {
     current_drawer_side: EdgeSide,
     current_profile_name: String,
     extensions: ExtensionRegistry,
+    is_zen_mode: bool,
 }
 
 impl App {
@@ -280,6 +281,7 @@ impl App {
             current_drawer_side,
             current_profile_name: "default".to_string(),
             extensions,
+            is_zen_mode: false,
         })
     }
 
@@ -832,6 +834,68 @@ impl App {
                     }
                 }
             }
+            Command::ToggleZenMode => {
+                self.is_zen_mode = !self.is_zen_mode;
+                self.layout();
+                self.send(Event::ZenModeState { active: self.is_zen_mode });
+                self.send(Event::Toast {
+                    message: if self.is_zen_mode {
+                        "Zen Mode enabled (⌘.)".into()
+                    } else {
+                        "Zen Mode disabled".into()
+                    },
+                });
+            }
+            Command::ToggleInvertDark => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekToggleInvertDark) window.__peekToggleInvertDark();");
+                }
+                self.send(Event::Toast {
+                    message: "Toggled smart dark mode (⌘⇧D)".into(),
+                });
+            }
+            Command::TogglePiP => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekTogglePiP) window.__peekTogglePiP();");
+                }
+            }
+            Command::ZoomIn => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekZoom) window.__peekZoom(0.1, false);");
+                }
+            }
+            Command::ZoomOut => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekZoom) window.__peekZoom(-0.1, false);");
+                }
+            }
+            Command::ZoomReset => {
+                if let Some(view) = self.active_view() {
+                    let _ = self.engine.evaluate(view, "if (window.__peekZoom) window.__peekZoom(0.0, true);");
+                }
+            }
+            Command::CopyMarkdownLink => {
+                if let Some(tab) = self.tabs.active() {
+                    let title = if tab.title.trim().is_empty() { &tab.url } else { &tab.title };
+                    let clean = peek_core::url::strip_tracking_params(&tab.url);
+                    let md = format!("[{title}]({clean})");
+                    if let Some(ui_id) = self.ui_id {
+                        let escaped = serde_json::to_string(&md).unwrap_or_default();
+                        let js = format!("if (navigator.clipboard) navigator.clipboard.writeText({escaped});");
+                        let _ = self.engine.evaluate(ui_id, &js);
+                    }
+                    self.send(Event::Toast {
+                        message: "Copied Markdown link (⌘⌥C)".into(),
+                    });
+                }
+            }
+            Command::SaveNote { content } => {
+                let _ = self.store.set_setting("scratchpad_notes", &content);
+            }
+            Command::GetNote => {
+                let content = self.store.get_setting("scratchpad_notes").unwrap_or_default().unwrap_or_default();
+                self.send(Event::NoteLoaded { content });
+            }
             Command::Quit => {
                 self.shutdown();
                 std::process::exit(0);
@@ -1038,6 +1102,13 @@ impl App {
                     self.send(Event::Toast { message: "Toggled audio mute".into() });
                 }
             }
+            Shortcut::ToggleZenMode => self.handle_command(Command::ToggleZenMode),
+            Shortcut::ToggleInvertDark => self.handle_command(Command::ToggleInvertDark),
+            Shortcut::TogglePiP => self.handle_command(Command::TogglePiP),
+            Shortcut::ZoomIn => self.handle_command(Command::ZoomIn),
+            Shortcut::ZoomOut => self.handle_command(Command::ZoomOut),
+            Shortcut::ZoomReset => self.handle_command(Command::ZoomReset),
+            Shortcut::CopyMarkdownLink => self.handle_command(Command::CopyMarkdownLink),
         }
     }
 
@@ -1549,6 +1620,13 @@ impl App {
         let (w, h) = self.window_size;
         if self.is_active_blank() {
             Bounds::new(0.0, 0.0, w, h)
+        } else if self.is_zen_mode {
+            let height = if self.omnibar_open {
+                BAR_HEIGHT + OMNIBAR_PANEL_HEIGHT
+            } else {
+                BAR_HEIGHT
+            };
+            Bounds::new(0.0, 0.0, w, height)
         } else {
             let height = BAR_HEIGHT
                 + if self.omnibar_open {
@@ -1562,7 +1640,11 @@ impl App {
 
     fn page_bounds(&self) -> Bounds {
         let (w, h) = self.window_size;
-        Bounds::new(0.0, BAR_HEIGHT, w, (h - BAR_HEIGHT).max(0.0))
+        if self.is_zen_mode {
+            Bounds::new(0.0, 0.0, w, h)
+        } else {
+            Bounds::new(0.0, BAR_HEIGHT, w, (h - BAR_HEIGHT).max(0.0))
+        }
     }
 
     fn drawer_bounds_for_side(&self, side: EdgeSide) -> Bounds {

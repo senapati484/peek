@@ -93,13 +93,52 @@ touch "$APP_BUNDLE"
 echo "==> 5. Creating macOS DMG installer package..."
 DIST_DIR="$ROOT_DIR/dist"
 mkdir -p "$DIST_DIR"
-STAGING_DIR="/tmp/peek_dmg_staging_$$"
-rm -rf "$STAGING_DIR"
-mkdir -p "$STAGING_DIR"
-cp -R "$APP_BUNDLE" "$STAGING_DIR/"
-ln -s /Applications "$STAGING_DIR/Applications"
-hdiutil create -volname "Peek" -srcfolder "$STAGING_DIR" -ov -format UDZO "$DIST_DIR/Peek-macos-arm64.dmg" >/dev/null
-rm -rf "$STAGING_DIR"
+DMG_VOLNAME="Peek"
+DMG_FINAL="$DIST_DIR/Peek-macos-arm64.dmg"
+TMP_DMG="/tmp/peek_rw_$$.dmg"
+rm -f "$DMG_FINAL" "$TMP_DMG"
+
+APP_SIZE_MB=$(du -sm "$APP_BUNDLE" | awk '{print $1}')
+DMG_SIZE_MB=$((APP_SIZE_MB + 60))
+
+hdiutil create -size "${DMG_SIZE_MB}m" -fs HFS+ -volname "$DMG_VOLNAME" -ov "$TMP_DMG" >/dev/null
+
+MOUNT_OUT=$(hdiutil attach -nobrowse -noverify -noautoopen "$TMP_DMG")
+DEV_NODE=$(echo "$MOUNT_OUT" | head -n 1 | awk '{print $1}')
+MOUNT_DIR="/Volumes/$DMG_VOLNAME"
+
+cp -R "$APP_BUNDLE" "$MOUNT_DIR/"
+ln -s /Applications "$MOUNT_DIR/Applications"
+
+# Set Finder window bounds and side-by-side drag-and-drop icon positions
+osascript << EOF >/dev/null 2>&1 || true
+tell application "Finder"
+    tell disk "$DMG_VOLNAME"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {200, 120, 860, 500}
+        set theViewOptions to the icon view options of container window
+        set icon size of theViewOptions to 96
+        set arrangement of theViewOptions to not arranged
+        set position of item "Peek.app" of container window to {180, 190}
+        set position of item "Applications" of container window to {480, 190}
+        update without registering applications
+        delay 1
+        close
+    end tell
+end tell
+EOF
+
+sync
+sleep 1
+hdiutil detach "$DEV_NODE" >/dev/null 2>&1 || diskutil eject "$DEV_NODE" >/dev/null 2>&1 || true
+hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_FINAL" -ov >/dev/null
+rm -f "$TMP_DMG"
+
+# Also create universal copy in dist if needed
+cp -f "$DMG_FINAL" "$DIST_DIR/Peek-macos-universal.dmg" 2>/dev/null || true
 
 echo "==> Done! Successfully created:"
 echo "    App bundle: $ROOT_DIR/Peek.app"

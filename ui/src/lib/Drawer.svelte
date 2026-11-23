@@ -14,7 +14,7 @@
     type TabInfo,
   } from './ipc';
 
-  type Section = 'tabs' | 'history' | 'bookmarks' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
+  type Section = 'tabs' | 'spaces' | 'history' | 'bookmarks' | 'notes' | 'general' | 'appearance' | 'blocking' | 'preview' | 'profiles' | 'extensions' | 'shortcuts' | 'about';
 
   function getInitialParams() {
     const rawHash = window.location.hash.replace('#', '');
@@ -23,7 +23,7 @@
     const sideParam = params.get('side')?.toLowerCase();
     const sectionParam = params.get('section')?.toLowerCase();
     const validSections: Section[] = [
-      'tabs', 'history', 'bookmarks', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
+      'tabs', 'spaces', 'history', 'bookmarks', 'notes', 'general', 'appearance', 'blocking', 'preview', 'profiles', 'extensions', 'shortcuts', 'about'
     ];
 
     let resolvedSection: Section = sideParam === 'right' ? 'general' : 'tabs';
@@ -96,12 +96,93 @@
     send({ type: 'discardTab', id });
   }
 
+  // Spaces State
+  type SpaceId = 'personal' | 'work' | 'dev' | 'research';
+  type SpaceInfo = { id: SpaceId; name: string; icon: string; color: string; desc: string };
+
+  const SPACES: SpaceInfo[] = [
+    { id: 'personal', name: 'Personal', icon: '👤', color: '#3b82f6', desc: 'Daily browsing & leisure' },
+    { id: 'work', name: 'Work', icon: '💼', color: '#a855f7', desc: 'Projects & company portals' },
+    { id: 'dev', name: 'Dev', icon: '⚡', color: '#10b981', desc: 'GitHub, docs & localhost' },
+    { id: 'research', name: 'Research', icon: '🔬', color: '#f59e0b', desc: 'Papers, articles & notes' },
+  ];
+
+  let activeSpace = $state<'all' | SpaceId>('all');
+  let tabSpaceMap = $state<Record<number, SpaceId>>({});
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('peek_tab_spaces');
+      if (raw) tabSpaceMap = JSON.parse(raw);
+      const savedSpace = localStorage.getItem('peek_active_space');
+      if (savedSpace) activeSpace = savedSpace as 'all' | SpaceId;
+    } catch {}
+  }
+
+  function setSpace(space: 'all' | SpaceId) {
+    activeSpace = space;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('peek_active_space', space);
+    }
+  }
+
+  function cycleTabSpace(tabId: number) {
+    const spaceOrder: SpaceId[] = ['personal', 'work', 'dev', 'research'];
+    const current = tabSpaceMap[tabId] || 'personal';
+    const nextIdx = (spaceOrder.indexOf(current) + 1) % spaceOrder.length;
+    const nextSpace = spaceOrder[nextIdx];
+    tabSpaceMap = { ...tabSpaceMap, [tabId]: nextSpace };
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('peek_tab_spaces', JSON.stringify(tabSpaceMap));
+    }
+  }
+
+  // Research Scratchpad Notes State
+  let noteContent = $state('');
+  let copiedNotes = $state(false);
+  let noteSaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function onNoteInput(event: Event) {
+    const val = (event.target as HTMLTextAreaElement).value;
+    noteContent = val;
+    if (noteSaveTimer) clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(() => {
+      send({ type: 'saveNote', content: noteContent });
+    }, 400);
+  }
+
+  function insertCurrentTabLink() {
+    if (!activeTab || isBlank(activeTab.url)) return;
+    const title = activeTab.title || activeTab.url;
+    const mdLink = `\n- [${title}](${activeTab.url})\n`;
+    noteContent += mdLink;
+    send({ type: 'saveNote', content: noteContent });
+  }
+
+  function copyNotes() {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(noteContent);
+      copiedNotes = true;
+      setTimeout(() => { copiedNotes = false; }, 1800);
+    }
+  }
+
+  let noteWords = $derived(
+    noteContent.trim() ? noteContent.trim().split(/\s+/).filter(Boolean).length : 0
+  );
+
+  let visibleTabs = $derived(
+    activeSpace === 'all'
+      ? tabs
+      : tabs.filter((t) => (tabSpaceMap[t.id] || 'personal') === activeSpace)
+  );
+
   let filteredTabs = $derived(
     filterText.trim()
-      ? tabs.filter((t) =>
+      ? visibleTabs.filter((t) =>
           (t.title || t.url).toLowerCase().includes(filterText.toLowerCase())
         )
-      : tabs
+      : visibleTabs
   );
 
   let keyboardSelectedIndex = $state(-1);
@@ -304,10 +385,10 @@
           if (event.side) {
             currentSide = event.side;
             if (event.side === 'left') {
-              if (section !== 'tabs' && section !== 'history' && section !== 'bookmarks') {
+              if (section !== 'tabs' && section !== 'spaces' && section !== 'history' && section !== 'bookmarks' && section !== 'notes') {
                 section = 'tabs';
               }
-            } else if (section === 'tabs' || section === 'history' || section === 'bookmarks') {
+            } else if (section === 'tabs' || section === 'spaces' || section === 'history' || section === 'bookmarks' || section === 'notes') {
               section = 'general';
             }
           }
@@ -322,10 +403,16 @@
               } else if (section === 'bookmarks') {
                 currentSide = 'left';
                 send({ type: 'getBookmarks' });
+              } else if (section === 'notes') {
+                currentSide = 'left';
+                send({ type: 'getNote' });
               }
             }
           }
         }
+        break;
+      case 'noteLoaded':
+        noteContent = event.content;
         break;
       case 'historyList':
         historyEntries = event.entries;
@@ -469,7 +556,15 @@
             onclick={() => { section = 'tabs'; filterText = ''; }}
             type="button"
           >
-            Tabs <span class="tab-count-badge">{tabs.length}</span>
+            Tabs <span class="tab-count-badge">{filteredTabs.length}</span>
+          </button>
+          <button
+            class="left-pill"
+            class:active={section === 'spaces'}
+            onclick={() => { section = 'spaces'; filterText = ''; }}
+            type="button"
+          >
+            Spaces
           </button>
           <button
             class="left-pill"
@@ -487,6 +582,14 @@
           >
             Saved
           </button>
+          <button
+            class="left-pill"
+            class:active={section === 'notes'}
+            onclick={() => { section = 'notes'; filterText = ''; send({ type: 'getNote' }); }}
+            type="button"
+          >
+            Notes
+          </button>
         </nav>
       </div>
       <button class="icon-close-btn" onclick={close} title="Close drawer (Esc)">
@@ -497,6 +600,31 @@
     </header>
 
     {#if section === 'tabs'}
+
+    <!-- Spaces Switcher Strip -->
+    <div class="spaces-filter-strip">
+      <button
+        class="space-filter-pill"
+        class:active={activeSpace === 'all'}
+        onclick={() => setSpace('all')}
+        type="button"
+      >
+        All
+      </button>
+      {#each SPACES as sp}
+        {@const spCount = tabs.filter(t => (tabSpaceMap[t.id] || 'personal') === sp.id).length}
+        <button
+          class="space-filter-pill"
+          class:active={activeSpace === sp.id}
+          style="--sp-color: {sp.color}"
+          onclick={() => setSpace(sp.id)}
+          type="button"
+        >
+          <span class="sp-dot" style="background: {sp.color}"></span>
+          {sp.name} <span class="sp-badge">{spCount}</span>
+        </button>
+      {/each}
+    </div>
 
     <div class="filter-wrap">
       <div class="filter-box">
@@ -594,6 +722,17 @@
                 </button>
               {/if}
               <button
+                class="tab-space-tag"
+                title={`Space: ${SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.name} (Click to switch space)`}
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  cycleTabSpace(tab.id);
+                }}
+              >
+                <span class="space-indicator-dot" style="background: {SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.color}"></span>
+              </button>
+              <button
                 class="tab-pin-btn is-pinned"
                 title="Unpin tab"
                 type="button"
@@ -684,6 +823,17 @@
                   </svg>
                 </button>
               {/if}
+              <button
+                class="tab-space-tag"
+                title={`Space: ${SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.name} (Click to switch space)`}
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  cycleTabSpace(tab.id);
+                }}
+              >
+                <span class="space-indicator-dot" style="background: {SPACES.find(s => s.id === (tabSpaceMap[tab.id] || 'personal'))?.color}"></span>
+              </button>
               <button
                 class="tab-pin-btn"
                 title="Pin tab"
@@ -907,6 +1057,122 @@
             {/each}
           </ul>
         {/if}
+      </div>
+
+    {:else if section === 'spaces'}
+      <div class="spaces-view-header">
+        <span class="spaces-view-title">Contextual Workspaces</span>
+        <span class="spaces-view-desc">Switch contexts or focus on a specific project</span>
+      </div>
+
+      <div class="body spaces-body">
+        <div class="spaces-grid">
+          {#each SPACES as sp}
+            {@const count = tabs.filter(t => (tabSpaceMap[t.id] || 'personal') === sp.id).length}
+            {@const activeInSpace = tabs.some(t => t.active && (tabSpaceMap[t.id] || 'personal') === sp.id)}
+            <div
+              class="space-card"
+              class:selected={activeSpace === sp.id}
+            >
+              <div class="space-card-header">
+                <span class="space-icon-box" style="background: {sp.color}18; color: {sp.color}">
+                  {sp.icon}
+                </span>
+                <div class="space-card-text">
+                  <div class="space-name-row">
+                    <span class="space-card-name">{sp.name}</span>
+                    {#if activeSpace === sp.id}
+                      <span class="space-current-badge">Active</span>
+                    {/if}
+                    {#if activeInSpace}
+                      <span class="space-live-indicator" title="Current tab belongs here"></span>
+                    {/if}
+                  </div>
+                  <span class="space-card-desc">{sp.desc}</span>
+                </div>
+              </div>
+
+              <div class="space-card-footer">
+                <span class="space-tab-count">{count} {count === 1 ? 'tab' : 'tabs'}</span>
+                <button
+                  class="space-select-btn"
+                  class:active-btn={activeSpace === sp.id}
+                  type="button"
+                  onclick={() => {
+                    setSpace(sp.id);
+                    section = 'tabs';
+                  }}
+                >
+                  {activeSpace === sp.id ? 'Viewing Tabs' : 'Switch Space'}
+                </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <footer class="drawer-footer">
+        <button
+          class="clear-all-btn"
+          type="button"
+          onclick={() => {
+            setSpace('all');
+            section = 'tabs';
+          }}
+        >
+          Show All Tabs Across Spaces
+        </button>
+      </footer>
+
+    {:else if section === 'notes'}
+      <div class="scratchpad-header">
+        <div class="scratchpad-meta">
+          <span class="scratchpad-badge">RESEARCH SCRATCHPAD</span>
+          <span class="scratchpad-count">{noteWords} words · {noteContent.length} chars</span>
+        </div>
+        <div class="scratchpad-actions">
+          {#if activeTab && !isBlank(activeTab.url)}
+            <button
+              class="scratch-action-btn"
+              title="Insert link to active tab"
+              type="button"
+              onclick={insertCurrentTabLink}
+            >
+              + Link Tab
+            </button>
+          {/if}
+          <button
+            class="scratch-action-btn"
+            title="Copy all notes to clipboard"
+            type="button"
+            onclick={copyNotes}
+          >
+            {copiedNotes ? '✓ Copied' : 'Copy'}
+          </button>
+          <button
+            class="scratch-action-btn danger"
+            title="Clear notes"
+            type="button"
+            onclick={() => {
+              if (confirm('Clear scratchpad notes?')) {
+                noteContent = '';
+                send({ type: 'saveNote', content: '' });
+              }
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="body scratchpad-body">
+        <textarea
+          class="scratchpad-editor"
+          placeholder="Jot down quick thoughts, research findings, and task notes here...&#10;&#10;• Autosaved locally to your SQLite database.&#10;• Use '+ Link Tab' to insert current page as markdown.&#10;• Copy out to Notion, Slack, or Obsidian."
+          bind:value={noteContent}
+          oninput={onNoteInput}
+          spellcheck="false"
+        ></textarea>
       </div>
     {/if}
 
@@ -2831,5 +3097,320 @@
   .quit-icon {
     width: 12px;
     height: 12px;
+  }
+
+  /* Spaces Filter Strip */
+  .spaces-filter-strip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    user-select: none;
+  }
+
+  .spaces-filter-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .space-filter-pill {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+    transition: all 0.14s ease;
+  }
+
+  .space-filter-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+  }
+
+  .space-filter-pill.active {
+    background: var(--hover);
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.18);
+    font-weight: 500;
+  }
+
+  .sp-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .sp-badge {
+    font-size: 9.5px;
+    opacity: 0.7;
+  }
+
+  /* Tab space indicator */
+  .tab-space-tag {
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    opacity: 0.6;
+    transition: opacity 0.12s ease;
+    margin-right: 2px;
+  }
+
+  .tab-space-tag:hover {
+    opacity: 1;
+    background: var(--hover);
+  }
+
+  .space-indicator-dot {
+    width: 5.5px;
+    height: 5.5px;
+    border-radius: 50%;
+  }
+
+  /* Spaces View */
+  .spaces-view-header {
+    padding: 14px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .spaces-view-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .spaces-view-desc {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  .spaces-body {
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .spaces-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .space-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.15s ease;
+  }
+
+  .space-card:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: var(--hover);
+  }
+
+  .space-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-soft);
+  }
+
+  .space-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .space-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .space-card-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .space-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .space-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .space-current-badge {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 9999px;
+  }
+
+  .space-live-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+  }
+
+  .space-card-desc {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .space-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .space-tab-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .space-select-btn {
+    all: unset;
+    cursor: pointer;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.12s ease;
+  }
+
+  .space-select-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .space-select-btn.active-btn {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+  }
+
+  /* Scratchpad View */
+  .scratchpad-header {
+    padding: 12px 14px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    gap: 8px;
+  }
+
+  .scratchpad-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .scratchpad-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+
+  .scratchpad-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .scratchpad-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .scratch-action-btn {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.12s ease;
+  }
+
+  .scratch-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .scratch-action-btn.danger:hover {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .scratchpad-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .scratchpad-editor {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    flex: 1;
+    min-height: 380px;
+    background: transparent;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .scratchpad-editor::placeholder {
+    color: var(--muted);
+    opacity: 0.6;
+    line-height: 1.5;
   }
 </style>

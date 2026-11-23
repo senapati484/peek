@@ -165,9 +165,16 @@ flowchart TD
 | `⌘ T` / `Ctrl T` | Press | Open a new blank tab (reveals centered omnibar & pinned sites) |
 | `⌘ W` / `Ctrl W` | Press | Close current active tab (or selected tab in drawer) |
 | `⌘ L` / `Ctrl L` | Press | Focus the address and search omnibar |
+| `⌘ K` / `Ctrl K` | Press | Open unified Command Palette (`>` mode) & omnibar |
+| `⌘ .` / `⌘ ⇧ F` | Press | **Zen Mode:** 100% Ghost Canvas with auto-hiding floating bar |
+| `⌘ ⇧ D` | Press | **Smart Dark Mode:** Instant contrast inversion for blinding white sites |
+| `⌘ ⇧ P` | Press | **Picture-in-Picture:** Pop active video into a native floating window |
+| `⌘ ⌥ C` | Press | **Copy Markdown Link:** Copy `[Page Title](Clean URL)` for Notion/Slack/GitHub |
+| `⌘ +` / `⌘ -` / `⌘ 0` | Press | Hardware accelerated page zoom (Zoom in, Zoom out, Reset 100%) |
+| `⌘ ⇧ N` | Press | Open built-in Research Scratchpad markdown notes |
 | `⌘ R` / `Ctrl R` | Press | Reload current page |
 | `⌘ 1` – `⌘ 9` | Press | Switch directly to tab 1 through 9 |
-| `⌘ ⇧ [` / `Ctrl ⇧ [` | Press / Hover Left Edge | Toggle vertical tabs drawer |
+| `⌘ ⇧ [` / `Ctrl ⇧ [` | Press / Hover Left Edge | Toggle vertical tabs & spaces drawer |
 | `⌘ ⇧ ]` / `Ctrl ⇧ ]` | Press / Hover Right Edge | Toggle settings & tools drawer |
 | `⌥ ←` / `Alt ←` | Press | Navigate back in browsing history |
 | `⌥ →` / `Alt →` | Press | Navigate forward in browsing history |

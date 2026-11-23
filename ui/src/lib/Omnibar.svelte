@@ -8,6 +8,7 @@
     send,
     stripTrackingParams,
     type EdgeSide,
+    type HistoryItem,
     type PeekEvent,
     type PinnedSite,
     type Suggestion,
@@ -203,6 +204,78 @@
       action: () => send({ type: 'reload' }),
     },
     {
+      id: 'toggle-zen-mode',
+      title: 'Toggle Zen Mode',
+      detail: 'Ghost canvas view with auto-hiding omnibar',
+      shortcut: '⌘.',
+      keywords: ['zen', 'fullscreen', 'canvas', 'minimal', 'focus', 'ghost'],
+      action: () => send({ type: 'toggleZenMode' }),
+    },
+    {
+      id: 'toggle-dark-mode',
+      title: 'Smart Dark Mode',
+      detail: 'Instant high-contrast dark theme for current page',
+      shortcut: '⌘⇧D',
+      keywords: ['dark', 'mode', 'night', 'theme', 'invert', 'contrast'],
+      action: () => send({ type: 'toggleInvertDark' }),
+    },
+    {
+      id: 'toggle-pip',
+      title: 'Picture-in-Picture Video',
+      detail: 'Pop active video into a floating window',
+      shortcut: '⌘⇧P',
+      keywords: ['pip', 'picture', 'video', 'float', 'popout'],
+      action: () => send({ type: 'togglePiP' }),
+    },
+    {
+      id: 'copy-markdown-link',
+      title: 'Copy Markdown Link',
+      detail: 'Copy [Page Title](URL) to clipboard',
+      shortcut: '⌘⌥C',
+      keywords: ['copy', 'markdown', 'link', 'notion', 'slack', 'share'],
+      action: () => send({ type: 'copyMarkdownLink' }),
+    },
+    {
+      id: 'zoom-in',
+      title: 'Zoom In',
+      detail: 'Increase page zoom scale by 10%',
+      shortcut: '⌘+',
+      keywords: ['zoom', 'in', 'larger', 'scale', 'text'],
+      action: () => send({ type: 'zoomIn' }),
+    },
+    {
+      id: 'zoom-out',
+      title: 'Zoom Out',
+      detail: 'Decrease page zoom scale by 10%',
+      shortcut: '⌘-',
+      keywords: ['zoom', 'out', 'smaller', 'scale', 'text'],
+      action: () => send({ type: 'zoomOut' }),
+    },
+    {
+      id: 'zoom-reset',
+      title: 'Reset Zoom',
+      detail: 'Reset page zoom scale to 100%',
+      shortcut: '⌘0',
+      keywords: ['zoom', 'reset', 'default', '100%'],
+      action: () => send({ type: 'zoomReset' }),
+    },
+    {
+      id: 'open-notes',
+      title: 'Research Scratchpad Notes',
+      detail: 'Open local markdown research notepad',
+      shortcut: '⌘⇧N',
+      keywords: ['notes', 'scratchpad', 'markdown', 'write', 'ideas'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'notes' }),
+    },
+    {
+      id: 'open-spaces',
+      title: 'Spaces & Workspaces',
+      detail: 'Switch between Personal, Work, and Dev spaces',
+      shortcut: '⌘⇧S',
+      keywords: ['spaces', 'workspace', 'contexts', 'groups', 'projects'],
+      action: () => send({ type: 'setDrawer', open: true, side: 'left', section: 'spaces' }),
+    },
+    {
       id: 'quit-peek',
       title: 'Quit Peek',
       detail: 'Exit the browser',
@@ -211,6 +284,37 @@
       action: () => send({ type: 'quit' }),
     },
   ];
+
+  // Zen Mode & Quick Tools State
+  let isZenMode = $state(false);
+  let invertDarkActive = $state(false);
+  let zenHovered = $state(false);
+  let zenHoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Jump Back In (Recent Sites)
+  let recentSites = $state<HistoryItem[]>([]);
+
+  const SEARCH_ENGINES = [
+    { id: 'google', label: 'Google', icon: '🔍' },
+    { id: 'duckduckgo', label: 'DuckDuckGo', icon: '🦆' },
+    { id: 'brave', label: 'Brave', icon: '🦁' },
+    { id: 'github', label: 'GitHub', icon: '🐙' },
+    { id: 'youtube', label: 'YouTube', icon: '▶' },
+    { id: 'perplexity', label: 'Perplexity', icon: '⚡' },
+  ];
+
+  function getGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  function selectEngine(engineId: string) {
+    searchEngine = engineId;
+    send({ type: 'setSetting', key: 'searchEngine', value: engineId });
+    triggerToast(`Default search: ${engineId}`);
+  }
 
   // Pinned Websites State
   let pinnedSites = $state<PinnedSite[]>([]);
@@ -252,6 +356,12 @@
   let hudTimer: ReturnType<typeof setTimeout> | undefined;
 
   let isStartPage = $derived(isBlank(activeUrl));
+
+  $effect(() => {
+    if (isStartPage) {
+      send({ type: 'getHistory' });
+    }
+  });
 
   let isCurrentUrlPinned = $derived(
     !isBlank(activeUrl) &&
@@ -407,6 +517,27 @@
       case 'readerModeState':
         readerModeActive = event.active;
         break;
+      case 'zenModeState':
+        isZenMode = event.active;
+        break;
+      case 'invertDarkState':
+        invertDarkActive = event.active;
+        break;
+      case 'historyList': {
+        const seen = new Set<string>();
+        recentSites = event.entries.filter((e) => {
+          if (!e.url || isBlank(e.url)) return false;
+          try {
+            const host = new URL(e.url).hostname;
+            if (seen.has(host)) return false;
+            seen.add(host);
+            return true;
+          } catch {
+            return false;
+          }
+        }).slice(0, 4);
+        break;
+      }
       case 'toast':
         triggerToast(event.message);
         break;
@@ -871,6 +1002,7 @@
         <div class="logo-wrapper">
           <img src="/logo.png" alt="Peek Logo" class="hero-logo" />
         </div>
+        <div class="hero-greeting">{getGreeting()}</div>
       </div>
 
       <div class="search-box">
@@ -910,6 +1042,21 @@
           {/if}
         </div>
 
+        <!-- Search Engine Quick Switcher -->
+        <div class="engine-pills-row">
+          {#each SEARCH_ENGINES as eng}
+            <button
+              class="engine-chip"
+              class:active={searchEngine.toLowerCase() === eng.id}
+              type="button"
+              onclick={() => selectEngine(eng.id)}
+            >
+              <span class="eng-icon">{eng.icon}</span>
+              <span class="eng-label">{eng.label}</span>
+            </button>
+          {/each}
+        </div>
+
         {#if suggestions.length}
           <div class="start-suggestions" role="listbox">
             {#each suggestions as item, index (item.kind + ':' + (item.url ?? item.text))}
@@ -935,6 +1082,25 @@
       </div>
 
       {#if !input.trim() && !suggestions.length}
+        {#if recentSites.length > 0}
+          <div class="recent-jumps-section">
+            <span class="recent-jumps-title">Jump Back In</span>
+            <div class="recent-jumps-row">
+              {#each recentSites as site}
+                <button
+                  class="recent-jump-chip"
+                  type="button"
+                  onclick={() => handleOpenPin(site.url)}
+                  title={site.url}
+                >
+                  <span class="recent-jump-initial">{domainInitial(site.url)}</span>
+                  <span class="recent-jump-title">{site.title || cleanDomain(site.url)}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- Pinned Websites Speed Dial Grid -->
         <div class="pinned-section">
           <div class="pinned-grid">
@@ -1073,7 +1239,33 @@
     </div>
   {:else}
     <!-- Docked Minimalist Top Bar -->
-    <div class="bar-container">
+    {#if isZenMode && !zenHovered && !focused}
+      <div
+        class="zen-hover-trigger"
+        role="presentation"
+        aria-hidden="true"
+        onmouseenter={() => {
+          zenHovered = true;
+        }}
+      ></div>
+    {/if}
+    <div
+      class="bar-container"
+      role="toolbar"
+      tabindex="-1"
+      aria-label="Address bar"
+      class:zen-mode={isZenMode}
+      class:zen-revealed={zenHovered || focused}
+      onmouseenter={() => {
+        if (zenHoverTimer) clearTimeout(zenHoverTimer);
+        zenHovered = true;
+      }}
+      onmouseleave={() => {
+        zenHoverTimer = setTimeout(() => {
+          zenHovered = false;
+        }, 280);
+      }}
+    >
       <div class="bar" onwheel={onBarWheel} title="Swipe horizontally with 2 fingers to cycle tabs">
         <!-- Logo / Tabs Drawer Trigger -->
         <button
@@ -1251,6 +1443,70 @@
             </span>
           </button>
         {/if}
+
+        <!-- Smart Dark Mode Toggle -->
+        <button
+          class="tool-btn dark-mode-btn"
+          class:active-dark={invertDarkActive}
+          title="Toggle Smart Dark Mode (⌘⇧D)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'toggleInvertDark' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- Picture-in-Picture Video -->
+        <button
+          class="tool-btn pip-btn"
+          title="Picture-in-Picture Video (⌘⇧P)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'togglePiP' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <rect x="2" y="3" width="12" height="9" rx="1.5" stroke-width="1.2"/>
+            <rect x="8" y="7" width="5" height="4" rx="1" fill="currentColor" stroke-width="0.8"/>
+          </svg>
+        </button>
+
+        <!-- Copy Markdown Link Button -->
+        <button
+          class="tool-btn copy-md-btn"
+          title="Copy Markdown Link (⌘⌥C)"
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'copyMarkdownLink' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke-width="1.2"/>
+            <path d="M4 10V6l2 2.5L8 6v4M11.5 6v4M10 8.5l1.5 1.5 1.5-1.5" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- Zen Mode Toggle Button -->
+        <button
+          class="tool-btn zen-btn"
+          class:active-zen={isZenMode}
+          title={isZenMode ? "Exit Zen Mode (⌘.)" : "Zen Mode / Ghost Canvas (⌘.)"}
+          type="button"
+          onclick={(e) => {
+            e.stopPropagation();
+            send({ type: 'toggleZenMode' });
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" class="tool-icon">
+            <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
 
         <!-- Shield / Privacy Button -->
         <button
@@ -1547,6 +1803,137 @@
 
   .hero-logo:hover {
     transform: scale(1.06);
+  }
+
+  .hero-greeting {
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    opacity: 0.85;
+    user-select: none;
+  }
+
+  /* Engine Selector Chips */
+  .engine-pills-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    user-select: none;
+  }
+
+  .engine-chip {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.14s ease;
+  }
+
+  .engine-chip:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.14);
+    transform: translateY(-0.5px);
+  }
+
+  .engine-chip.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    font-weight: 600;
+  }
+
+  .eng-icon {
+    font-size: 10.5px;
+  }
+
+  .eng-label {
+    letter-spacing: 0.01em;
+  }
+
+  /* Recent Jumps */
+  .recent-jumps-section {
+    width: 100%;
+    max-width: min(620px, calc(100vw - 48px));
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    animation: fadeIn 0.28s ease;
+  }
+
+  .recent-jumps-title {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted);
+    opacity: 0.8;
+  }
+
+  .recent-jumps-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .recent-jump-chip {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 12px;
+    color: var(--text);
+    max-width: 170px;
+    transition: all 0.14s ease;
+  }
+
+  .recent-jump-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-1px);
+  }
+
+  .recent-jump-initial {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--hover);
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .recent-jump-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 450;
   }
 
   /* Sleek, Prominent Responsive Search Box */
@@ -2175,6 +2562,58 @@
   .tool-btn:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  .dark-mode-btn.active-dark {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.15);
+  }
+
+  .zen-btn.active-zen {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  /* Zen Mode Floating Island */
+  .zen-hover-trigger {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+    z-index: 9998;
+    pointer-events: auto;
+  }
+
+  .bar-container.zen-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: transparent;
+    border-bottom: none;
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  }
+
+  .bar-container.zen-mode.zen-revealed {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .bar-container.zen-mode .bar {
+    max-width: min(840px, calc(100vw - 32px));
+    margin: 6px auto 0;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    background: color-mix(in srgb, var(--panel) 92%, #000);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
   }
 
   .pin-btn.pinned {

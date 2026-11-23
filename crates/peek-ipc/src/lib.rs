@@ -200,6 +200,24 @@ pub enum Command {
     },
     /// Toggle bookmark state for a URL.
     ToggleBookmark { url: String, title: String },
+    /// Toggle Zen / Ghost Canvas mode.
+    ToggleZenMode,
+    /// Toggle Smart Inverted Dark Mode on current tab.
+    ToggleInvertDark,
+    /// Toggle Picture-in-Picture on active video.
+    TogglePiP,
+    /// Zoom in on active page.
+    ZoomIn,
+    /// Zoom out on active page.
+    ZoomOut,
+    /// Reset zoom on active page.
+    ZoomReset,
+    /// Copy page title and URL as Markdown link.
+    CopyMarkdownLink,
+    /// Save user scratchpad notes.
+    SaveNote { content: String },
+    /// Request saved scratchpad notes.
+    GetNote,
     Quit,
 }
 
@@ -289,6 +307,18 @@ pub enum Event {
     },
     ReaderModeState {
         active: bool,
+    },
+    ZenModeState {
+        active: bool,
+    },
+    InvertDarkState {
+        active: bool,
+    },
+    NoteLoaded {
+        content: String,
+    },
+    ZoomLevel {
+        percent: u32,
     },
 }
 
@@ -440,6 +470,13 @@ pub enum Shortcut {
     FindInPage,
     ToggleReaderMode,
     ToggleMute,
+    ToggleZenMode,
+    ToggleInvertDark,
+    TogglePiP,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
+    CopyMarkdownLink,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

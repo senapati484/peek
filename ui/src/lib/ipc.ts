@@ -90,7 +90,11 @@ export type PeekEvent =
   | { type: 'historyList'; entries: HistoryItem[] }
   | { type: 'bookmarksList'; bookmarks: BookmarkItem[] }
   | { type: 'findState'; open: boolean; query: string; count: number; index: number }
-  | { type: 'readerModeState'; active: boolean };
+  | { type: 'readerModeState'; active: boolean }
+  | { type: 'zenModeState'; active: boolean }
+  | { type: 'invertDarkState'; active: boolean }
+  | { type: 'noteLoaded'; content: string }
+  | { type: 'zoomLevel'; percent: number };
 
 export type PeekCommand =
   | { type: 'navigate'; input: string }
@@ -139,6 +143,15 @@ export type PeekCommand =
   | { type: 'clearHistory' }
   | { type: 'getBookmarks'; query?: string }
   | { type: 'toggleBookmark'; url: string; title: string }
+  | { type: 'toggleZenMode' }
+  | { type: 'toggleInvertDark' }
+  | { type: 'togglePiP' }
+  | { type: 'zoomIn' }
+  | { type: 'zoomOut' }
+  | { type: 'zoomReset' }
+  | { type: 'copyMarkdownLink' }
+  | { type: 'saveNote'; content: string }
+  | { type: 'getNote' }
   | { type: 'quit' };
 
 type Bridge = {
