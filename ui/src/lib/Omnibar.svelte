@@ -368,6 +368,20 @@
         break;
       case 'zenModeState':
         isZenMode = event.active;
+        if (!event.active) {
+          zenHovered = false;
+        }
+        break;
+      case 'zenReveal':
+        zenHovered = event.revealed;
+        break;
+      case 'focusOmnibar':
+        focused = true;
+        send({ type: 'setOmnibarOpen', open: true });
+        setTimeout(() => {
+          inputEl?.focus();
+          inputEl?.select();
+        }, 30);
         break;
       case 'readerModeState':
         readerModeActive = event.active;

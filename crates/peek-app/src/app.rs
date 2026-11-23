@@ -196,6 +196,7 @@ pub struct App {
     extensions: ExtensionRegistry,
     userscripts: UserScriptRegistry,
     is_zen_mode: bool,
+    zen_revealed: bool,
 }
 
 impl App {
@@ -289,6 +290,7 @@ impl App {
             extensions,
             userscripts,
             is_zen_mode: false,
+            zen_revealed: false,
         })
     }
 
@@ -647,6 +649,9 @@ impl App {
             Command::SetOmnibarOpen { open } => {
                 if self.omnibar_open != open {
                     self.omnibar_open = open;
+                    if !open && self.is_zen_mode {
+                        self.zen_revealed = false;
+                    }
                     if let Some(id) = self.ui_id {
                         let bounds = self.chrome_bounds();
                         let _ = self.engine.set_bounds(id, bounds);
@@ -661,12 +666,28 @@ impl App {
             }
             Command::FocusPage => {
                 self.omnibar_open = false;
+                if self.is_zen_mode {
+                    self.zen_revealed = false;
+                }
                 if let Some(id) = self.ui_id {
                     let bounds = self.chrome_bounds();
                     let _ = self.engine.set_bounds(id, bounds);
                 }
                 if let Some(view) = self.active_view() {
                     let _ = self.engine.focus(view);
+                }
+            }
+            Command::CollapseZenBar => {
+                if self.is_zen_mode && !self.omnibar_open {
+                    self.zen_revealed = false;
+                    if let Some(id) = self.ui_id {
+                        let bounds = self.chrome_bounds();
+                        let _ = self.engine.set_bounds(id, bounds);
+                    }
+                    if let Some(view) = self.active_view() {
+                        let _ = self.engine.focus(view);
+                    }
+                    self.send(Event::ZenReveal { revealed: false });
                 }
             }
             Command::SetDrawer { open, side, section } => {
@@ -856,6 +877,7 @@ impl App {
             }
             Command::ToggleZenMode => {
                 self.is_zen_mode = !self.is_zen_mode;
+                self.zen_revealed = false;
                 self.layout();
                 self.send(Event::ZenModeState { active: self.is_zen_mode });
                 self.send(Event::Toast {
@@ -982,6 +1004,17 @@ impl App {
             PageEvent::HoverEnd => self.schedule_preview_hide(),
             PageEvent::PreviewEnter => self.preview_hide_at = None,
             PageEvent::PreviewLeave => self.schedule_preview_hide(),
+            PageEvent::TopEdgeHover => {
+                if self.is_zen_mode && !self.zen_revealed && !self.omnibar_open {
+                    self.zen_revealed = true;
+                    if let Some(id) = self.ui_id {
+                        let bounds = self.chrome_bounds();
+                        let _ = self.engine.set_bounds(id, bounds);
+                    }
+                    self.ensure_layer_order();
+                    self.send(Event::ZenReveal { revealed: true });
+                }
+            }
             PageEvent::PreviewClick { url } => {
                 self.hide_preview();
                 self.new_tab(&url);
@@ -1078,6 +1111,15 @@ impl App {
         match shortcut {
             Shortcut::FocusOmnibar => {
                 self.close_drawer();
+                self.omnibar_open = true;
+                if self.is_zen_mode {
+                    self.zen_revealed = true;
+                }
+                if let Some(id) = self.ui_id {
+                    let bounds = self.chrome_bounds();
+                    let _ = self.engine.set_bounds(id, bounds);
+                    let _ = self.engine.focus(id);
+                }
                 self.send(Event::FocusOmnibar);
             }
             Shortcut::NewTab => {
@@ -1685,8 +1727,28 @@ impl App {
             .unwrap_or(true)
     }
 
-    pub fn bar_height(&self) -> f64 {
+    pub fn is_window_fullscreen(&self) -> bool {
         if self.window.fullscreen().is_some() {
+            return true;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use objc2::msg_send;
+            use tao::platform::macos::WindowExtMacOS;
+            let ns_win = self.window.ns_window() as *mut objc2::runtime::AnyObject;
+            if !ns_win.is_null() {
+                let mask: usize = unsafe { msg_send![ns_win, styleMask] };
+                const NS_WINDOW_STYLE_MASK_FULL_SCREEN: usize = 1 << 14;
+                if (mask & NS_WINDOW_STYLE_MASK_FULL_SCREEN) != 0 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn bar_height(&self) -> f64 {
+        if self.is_window_fullscreen() {
             BAR_HEIGHT_FULLSCREEN
         } else {
             BAR_HEIGHT
@@ -1701,8 +1763,10 @@ impl App {
         } else if self.is_zen_mode {
             let height = if self.omnibar_open {
                 bar_h + OMNIBAR_PANEL_HEIGHT
-            } else {
+            } else if self.zen_revealed {
                 bar_h
+            } else {
+                0.0
             };
             Bounds::new(0.0, 0.0, w, height)
         } else {

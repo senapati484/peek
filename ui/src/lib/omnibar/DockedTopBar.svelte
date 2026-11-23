@@ -71,17 +71,6 @@
   let profileInitial = $derived((activeProfile?.[0] || 'D').toUpperCase());
 </script>
 
-{#if isZenMode && !zenHovered && !focused}
-  <div
-    class="zen-hover-trigger"
-    role="presentation"
-    aria-hidden="true"
-    onmouseenter={() => {
-      zenHovered = true;
-    }}
-  ></div>
-{/if}
-
 <div
   class="bar-container"
   role="toolbar"
@@ -96,6 +85,9 @@
   onmouseleave={() => {
     zenHoverTimer = setTimeout(() => {
       zenHovered = false;
+      if (isZenMode && !focused) {
+        send({ type: 'collapseZenBar' });
+      }
     }, 280);
   }}
 >
@@ -404,6 +396,20 @@
       onAccept={onAcceptSuggestion}
     />
   {/if}
+
+  <!-- Backdrop to close expanded omnibar when clicking outside -->
+  {#if focused}
+    <div
+      class="omnibar-backdrop"
+      role="presentation"
+      tabindex="-1"
+      onclick={() => {
+        focused = false;
+        send({ type: 'setOmnibarOpen', open: false });
+        send({ type: 'focusPage' });
+      }}
+    ></div>
+  {/if}
 </div>
 
 <style>
@@ -706,14 +712,14 @@
     }
   }
 
-  .zen-hover-trigger {
+  .omnibar-backdrop {
     position: fixed;
-    top: 0;
+    top: 42px;
     left: 0;
     right: 0;
-    height: 12px;
-    z-index: 9998;
-    pointer-events: auto;
+    bottom: 0;
+    z-index: 40;
+    background: transparent;
   }
 
   .bar-container.zen-mode {

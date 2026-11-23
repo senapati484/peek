@@ -202,6 +202,8 @@ pub enum Command {
     ToggleBookmark { url: String, title: String },
     /// Toggle Zen / Ghost Canvas mode.
     ToggleZenMode,
+    /// Collapse the top bar in Zen mode.
+    CollapseZenBar,
     /// Toggle Smart Inverted Dark Mode on current tab.
     ToggleInvertDark,
     /// Toggle Picture-in-Picture on active video.
@@ -322,6 +324,9 @@ pub enum Event {
     },
     ZenModeState {
         active: bool,
+    },
+    ZenReveal {
+        revealed: bool,
     },
     InvertDarkState {
         active: bool,
@@ -462,6 +467,8 @@ pub enum PageEvent {
     PreviewEnter,
     /// The pointer left the preview webview.
     PreviewLeave,
+    /// Pointer is at the top edge of the window to reveal the top bar in Zen mode.
+    TopEdgeHover,
     /// Cursor is near a configured screen edge.
     EdgeProximity { side: EdgeSide, distance: f64 },
     /// A page started or stopped playing audio.

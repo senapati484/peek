@@ -440,6 +440,10 @@ const PAGE_SCRIPT: &str = r##"
     var distRight = Math.min(winW - ev.clientX, rightLimit - ev.clientX);
     var distLeft = ev.clientX;
 
+    if (ev.clientY <= 3) {
+      send({ type: "topEdgeHover" });
+    }
+
     var zone = Math.max(10, typeof EDGE_ZONE === "number" ? EDGE_ZONE : 10);
     var atLeft = distLeft <= zone;
     var atRight = distRight <= zone;
