@@ -70,6 +70,13 @@ Modern web browsers have evolved into monolithic operating systems. They consume
 
 ## 🖼️ Visual Showcase
 
+### 🔍 Space-to-Peek (Live Link QuickLook) — The Signature Feature
+Hover over any web link, search result, or pinned site card and press <kbd>Space</kbd> (or hold <kbd>Shift</kbd>) to instantly pop open a live, sandboxed preview card without losing your reading position or cluttering your tab strip. Release <kbd>Space</kbd> or press <kbd>Esc</kbd> to dismiss.
+
+<p align="center">
+  <img src="assets/screenshots/peek-quicklook-preview.png" alt="Peek Space-to-Peek Live Link QuickLook Preview" width="950" />
+</p>
+
 ### Distraction-Free Start Screen & Speed-Dial
 Focused search with ambient backlight, speed-dial pinned site cards, and immediate keyboard accessibility shortcuts (`⌘K`, `⌘L`, `Space`, `⇄`).
 
