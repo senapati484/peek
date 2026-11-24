@@ -105,6 +105,27 @@ Hover the right edge or press `⌘⇧]` to customize privacy filters, manage Man
   <img src="assets/screenshots/peek-settings-tools.png" alt="Peek Settings, Content Blocking and Memory Budget" width="950" />
 </p>
 
+### Instant Omnibar Suggestions with SQLite FTS5
+Instant fuzzy prefix matching across open tabs, visit history (powered by SQLite Full-Text Search FTS5), and search suggestions.
+
+<p align="center">
+  <img src="assets/screenshots/peek-search-suggestions.png" alt="Peek Omnibar Suggestions and Search" width="950" />
+</p>
+
+### Isolated Multi-Profile Browsing Partitioning
+Seamlessly switch between isolated profiles (e.g. *Personal*, *Work*, *Research*) with completely partitioned cookies, history, and localStorage.
+
+<p align="center">
+  <img src="assets/screenshots/peek-settings-profiles.png" alt="Peek Settings Profiles Isolation" width="950" />
+</p>
+
+### Distraction-Free Light Mode
+A tokenized, contrast-compliant light palette designed for daytime productivity.
+
+<p align="center">
+  <img src="assets/screenshots/peek-start-light.png" alt="Peek Light Mode Start Screen" width="950" />
+</p>
+
 ---
 
 ## ✨ Key Features
