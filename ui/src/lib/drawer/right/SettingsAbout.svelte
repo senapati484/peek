@@ -68,6 +68,7 @@
   <div class="tech-row"><span>Database</span> <strong>SQLite FTS5 + Connection Pool</strong></div>
   <div class="tech-row"><span>Adblock</span> <strong>Brave Adblock Engine (Rust)</strong></div>
   <div class="tech-row"><span>Extensions</span> <strong>Manifest V3 Host Engine</strong></div>
+  <div class="tech-row"><span>License</span> <strong>GNU General Public License v3.0 (GPLv3)</strong></div>
   <div class="tech-row">
     <span>Repository</span>
     <button

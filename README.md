@@ -15,7 +15,7 @@
   <a href="https://sourceforge.net/projects/peek-browser/files/v0.1.0/"><img src="https://img.shields.io/badge/Version-v0.1.0-blue?logo=sourceforge&logoColor=white" alt="Latest Version v0.1.0" /></a>
   <a href="https://github.com/senapati484/peek/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/senapati484/peek/ci.yml?branch=main&label=CI&logo=githubactions" alt="CI Status" /></a>
   <a href="https://sourceforge.net/projects/peek-browser/files/v0.1.0/"><img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?logo=apple&logoColor=white" alt="Platform Support" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald?style=flat" alt="MIT License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat" alt="GPLv3 License" /></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.80%2B-orange?logo=rust" alt="Rust 1.80+" /></a>
   <img src="https://img.shields.io/badge/Tests-74%2F74%20Passing-success" alt="Tests 74/74 Passing" />
   <img src="https://img.shields.io/badge/Memory-40--70MB%20Baseline-purple" alt="Memory 40-70MB" />
@@ -318,4 +318,4 @@ Please review [CONTRIBUTING.md](CONTRIBUTING.md) for code style, architectural c
 
 ## 📄 License
 
-This project is licensed under the open-source [MIT License](LICENSE).
+This project is licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
