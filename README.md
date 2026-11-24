@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/senapati484/peek/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/senapati484/peek?color=3b82f6&logo=github&label=Release" alt="Latest Release" /></a>
   <a href="https://sourceforge.net/projects/peek-browser/"><img src="https://img.shields.io/badge/SourceForge-peek--browser-f15a24?logo=sourceforge&logoColor=white" alt="SourceForge Project" /></a>
   <a href="https://sourceforge.net/projects/peek-browser/files/latest/download"><img src="https://img.shields.io/sourceforge/dt/peek-browser?label=SourceForge%20Downloads&color=f15a24&logo=sourceforge" alt="SourceForge Downloads" /></a>
+  <a href="https://sourceforge.net/projects/peek-browser/files/v0.1.0/"><img src="https://img.shields.io/badge/Version-v0.1.0-blue?logo=sourceforge&logoColor=white" alt="Latest Version v0.1.0" /></a>
   <a href="https://github.com/senapati484/peek/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/senapati484/peek/ci.yml?branch=main&label=CI&logo=githubactions" alt="CI Status" /></a>
-  <a href="https://github.com/senapati484/peek/releases"><img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?logo=apple&logoColor=white" alt="Platform Support" /></a>
+  <a href="https://sourceforge.net/projects/peek-browser/files/v0.1.0/"><img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?logo=apple&logoColor=white" alt="Platform Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald?style=flat" alt="MIT License" /></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.80%2B-orange?logo=rust" alt="Rust 1.80+" /></a>
   <img src="https://img.shields.io/badge/Tests-74%2F74%20Passing-success" alt="Tests 74/74 Passing" />
@@ -36,21 +36,21 @@
 
 ## 📦 Downloads & Installers
 
-Official release binaries and standalone installer packages are compiled, cryptographically verified, and mirrored across **GitHub Releases** and **[SourceForge (peek-browser)](https://sourceforge.net/projects/peek-browser/)**:
+Official release binaries and standalone installer packages are compiled, cryptographically verified, and distributed exclusively via **[SourceForge (peek-browser)](https://sourceforge.net/projects/peek-browser/)**:
 
-| Platform | Package Format | Architecture | GitHub Release | SourceForge Mirror | Quick Installation |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **macOS** | Apple Disk Image (`.dmg`) | Universal (Apple Silicon & Intel) | [**peek.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.dmg) | [**peek.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.dmg/download) | Open DMG & drag `Peek.app` to `/Applications` |
-| **macOS** | Apple Disk Image (`.dmg`) | Apple Silicon (M1/M2/M3/M4) | [**peek-arm64.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-arm64.dmg) | [**peek-arm64.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-arm64.dmg/download) | Optimized Apple Silicon installer |
-| **macOS** | Portable Bundle (`.zip`) | Universal (Apple Silicon & Intel) | [**peek-macos.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.zip) | [**peek-macos.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-macos.zip/download) | Extract and run `Peek.app` |
-| **Linux** | Native Debian Package (`.deb`) | `x86_64` / `amd64` | [**peek.deb**](https://github.com/senapati484/peek/releases/download/v0.1.0/peek_0.1.0_amd64.deb) | [**peek.deb**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.deb/download) | `sudo dpkg -i peek.deb` |
-| **Linux** | Standalone Tarball (`.tar.gz`) | `x86_64` | [**peek-linux.tar.gz**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-linux-x86_64.tar.gz) | [**peek-linux.tar.gz**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-linux.tar.gz/download) | `tar -xzf peek-linux.tar.gz && ./install.sh` |
-| **Windows** | Standalone Executable (`.exe`) | `x86_64` | — | [**peek.exe**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.exe/download) | Direct portable executable |
-| **Windows** | Portable Archive (`.zip`) | `x86_64` | [**peek-windows.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-windows-x86_64.zip) | [**peek-windows.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-windows.zip/download) | Extract and run `Peek.exe` |
-| **Checksums** | SHA256 Verification | All Platforms | [**SHA256SUMS.txt**](https://github.com/senapati484/peek/releases/download/v0.1.0/SHA256SUMS.txt) | [**SHA256SUMS.txt**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/) | `sha256sum -c SHA256SUMS.txt` |
+| Platform | Package Format | Architecture | Download Link (SourceForge) | Quick Installation |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS** | Apple Disk Image (`.dmg`) | Universal (Apple Silicon & Intel) | [**peek.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.dmg/download) | Open DMG & drag `Peek.app` to `/Applications` |
+| **macOS** | Apple Disk Image (`.dmg`) | Apple Silicon (M1/M2/M3/M4) | [**peek-arm64.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-arm64.dmg/download) | Optimized Apple Silicon installer |
+| **macOS** | Portable Bundle (`.zip`) | Universal (Apple Silicon & Intel) | [**peek-macos.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-macos.zip/download) | Extract and run `Peek.app` |
+| **Linux** | Native Debian Package (`.deb`) | `x86_64` / `amd64` | [**peek.deb**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.deb/download) | `sudo dpkg -i peek.deb` |
+| **Linux** | Standalone Tarball (`.tar.gz`) | `x86_64` | [**peek-linux.tar.gz**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-linux.tar.gz/download) | `tar -xzf peek-linux.tar.gz && ./install.sh` |
+| **Windows** | Standalone Executable (`.exe`) | `x86_64` | [**peek.exe**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.exe/download) | Direct portable executable (no install needed) |
+| **Windows** | Portable Archive (`.zip`) | `x86_64` | [**peek-windows.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-windows.zip/download) | Extract and run `Peek.exe` |
+| **Checksums** | SHA256 Verification | All Platforms | [**SHA256SUMS.txt**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/) | `sha256sum -c SHA256SUMS.txt` |
 
 > [!TIP]
-> You can also browse and download all assets directly from the [SourceForge Files Directory](https://sourceforge.net/projects/peek-browser/files/v0.1.0/).
+> You can also browse and download all distribution files directly from the [SourceForge Project Files Directory](https://sourceforge.net/projects/peek-browser/files/v0.1.0/).
 
 ---
 
