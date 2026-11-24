@@ -57,5 +57,7 @@ if (Test-Path $ZipFile) {
     Remove-Item -Force $ZipFile
 }
 Compress-Archive -Path "$StageDir\*" -DestinationPath $ZipFile
+Copy-Item $BinSrc -Destination (Join-Path $DistDir "peek.exe")
+Copy-Item $ZipFile -Destination (Join-Path $DistDir "peek-windows.zip")
 Write-Host "==> Created: $ZipFile"
 Write-Host "==> Windows build and packaging complete!"

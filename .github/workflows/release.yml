@@ -61,12 +61,15 @@ jobs:
         run: |
           mkdir -p dist
           zip -r -y dist/Peek-macos-universal.zip Peek.app
+          cp dist/Peek-macos-universal.zip dist/peek-macos.zip
           STAGING_DIR="/tmp/peek_dmg_staging"
           rm -rf "$STAGING_DIR"
           mkdir -p "$STAGING_DIR"
           cp -R Peek.app "$STAGING_DIR/"
           ln -s /Applications "$STAGING_DIR/Applications"
           hdiutil create -volname "Peek" -srcfolder "$STAGING_DIR" -ov -format UDZO dist/Peek-macos-universal.dmg
+          cp dist/Peek-macos-universal.dmg dist/peek.dmg
+          cp dist/Peek-macos-universal.dmg dist/peek-arm64.dmg
           rm -rf "$STAGING_DIR"
 
       - name: Upload macOS artifacts
@@ -119,6 +122,8 @@ jobs:
         run: |
           export SKIP_BUILD=1
           bash scripts/build_linux.sh
+          cp dist/Peek-linux-x86_64.tar.gz dist/peek-linux.tar.gz
+          cp dist/peek_*.deb dist/peek.deb
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -160,6 +165,8 @@ jobs:
         shell: pwsh
         run: |
           .\scripts\build_windows.ps1 -SkipBuild
+          Copy-Item target\release\Peek.exe dist\peek.exe
+          Copy-Item dist\Peek-windows-x86_64.zip dist\peek-windows.zip
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -169,7 +176,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish GitHub Release
+    name: Package Distribution Bundle
     needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
     steps:
@@ -188,12 +195,8 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload distribution bundle artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.event.inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v0.1.0' }}
-          name: Peek ${{ github.event.inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v0.1.0' }}
-          files: release-assets/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+          name: distribution-v0.1.0
+          path: release-assets/*

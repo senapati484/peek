@@ -129,6 +129,8 @@ Description: Minimal, blazing-fast native browser built in Rust
 EOF
 
   dpkg-deb --build --root-owner-group "$DEB_DIR" "$DIST_DIR/peek_${VERSION}_amd64.deb"
+  cp "$DIST_DIR/Peek-linux-x86_64.tar.gz" "$DIST_DIR/peek-linux.tar.gz" 2>/dev/null || true
+  cp "$DIST_DIR/peek_${VERSION}_amd64.deb" "$DIST_DIR/peek.deb" 2>/dev/null || true
   echo "==> Created: $DIST_DIR/peek_${VERSION}_amd64.deb"
 fi
 

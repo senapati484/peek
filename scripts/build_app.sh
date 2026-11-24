@@ -137,8 +137,10 @@ hdiutil detach "$DEV_NODE" >/dev/null 2>&1 || diskutil eject "$DEV_NODE" >/dev/n
 hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_FINAL" -ov >/dev/null
 rm -f "$TMP_DMG"
 
-# Also create universal copy in dist if needed
+# Also create universal and simple named copies in dist
 cp -f "$DMG_FINAL" "$DIST_DIR/Peek-macos-universal.dmg" 2>/dev/null || true
+cp -f "$DMG_FINAL" "$DIST_DIR/peek.dmg" 2>/dev/null || true
+cp -f "$DMG_FINAL" "$DIST_DIR/peek-arm64.dmg" 2>/dev/null || true
 
 echo "==> Done! Successfully created:"
 echo "    App bundle: $ROOT_DIR/Peek.app"
