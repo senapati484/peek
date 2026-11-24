@@ -70,32 +70,32 @@ Modern web browsers have evolved into monolithic operating systems. They consume
 
 ## 🖼️ Visual Showcase
 
-### Vertical Tabs Drawer & Memory Saver Dashboard
-Hover the left screen edge or press `⌘⇧[` to reveal vertical tabs with audio indicators, pinned tabs protection, real-time memory savings statistics, instant tab filtering, and drag-and-drop reordering.
+### Distraction-Free Start Screen & Speed-Dial
+Focused search with ambient backlight, speed-dial pinned site cards, and immediate keyboard accessibility shortcuts (`⌘K`, `⌘L`, `Space`, `⇄`).
+
+<p align="center">
+  <img src="assets/screenshots/peek-start-dark.png" alt="Peek Minimalist Start Screen and Speed Dial" width="950" />
+</p>
+
+### Browse Mode & Ultra-Slim Docked Top Bar
+When navigating, chrome collapses into an ultra-slim header with navigation chevrons, SSL indicators, quick page utilities (Pin, Clean URL, Markdown, PiP, Smart Night Mode, Reader Mode, Adblock Shield), profile avatars, and inline toast status pills.
+
+<p align="center">
+  <img src="assets/screenshots/peek-browse-mode.png" alt="Peek Browse Mode and Docked Top Bar" width="950" />
+</p>
+
+### Vertical Tabs Workspace & Memory Saver Dashboard
+Hover the left screen edge or press `⌘⇧[` to reveal vertical tabs with pinned tabs, tab groups, instant filtering, and real-time memory savings statistics (`380MB saved`) with 1-click **Hibernate Others**.
 
 <p align="center">
   <img src="assets/screenshots/peek-vertical-tabs.png" alt="Peek Vertical Tabs Drawer and Memory Saver Dashboard" width="950" />
 </p>
 
-### Settings, Privacy Engine & Memory Budget
-Hover the right edge or press `⌘⇧]` to customize privacy filters, manage separate browsing profiles, configure LRU memory discard thresholds, and select your preferred search engine.
+### Settings, Content Blocking & Extension Engine
+Hover the right edge or press `⌘⇧]` to customize privacy filters, manage Manifest V3 extensions, separate browsing profiles, and configure LRU memory discard thresholds.
 
 <p align="center">
   <img src="assets/screenshots/peek-settings-tools.png" alt="Peek Settings, Content Blocking and Memory Budget" width="950" />
-</p>
-
-### Instant Omnibar Suggestions with SQLite FTS5
-Instant fuzzy search and prefix matching across open tabs, visit history (powered by SQLite Full-Text Search FTS5), and search suggestions.
-
-<p align="center">
-  <img src="assets/screenshots/peek-search-suggestions.png" alt="Peek Omnibar Suggestions and Search" width="950" />
-</p>
-
-### Distraction-Free Light Mode
-A tokenized, contrast-compliant light palette designed for daytime productivity.
-
-<p align="center">
-  <img src="assets/screenshots/peek-start-light.png" alt="Peek Light Mode Start Screen" width="950" />
 </p>
 
 ---
