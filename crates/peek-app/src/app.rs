@@ -1102,6 +1102,9 @@ impl App {
                 }
             }
             PageEvent::ExtensionMessage { .. } => {}
+            PageEvent::InstallWebstoreExtension { extension_id, .. } => {
+                self.install_extension_path(&extension_id);
+            }
 
         }
         let _ = view;
@@ -2017,33 +2020,50 @@ impl App {
     }
 
     fn install_extension_path(&mut self, path: &str) {
-        let p = std::path::Path::new(path);
-        if !p.exists() {
-            self.send(Event::Toast {
-                message: format!("Extension path not found: {path}"),
-            });
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
             return;
         }
 
         let extensions_dir = self.profile_dir.join("extensions");
-        let result = if p.is_dir() {
-            peek_ext::ExtensionRegistry::install_from_folder(p, &extensions_dir)
-        } else if let Ok(bytes) = std::fs::read(p) {
-            peek_ext::ExtensionRegistry::install_from_bytes(&bytes, &extensions_dir)
-        } else {
+        let is_remote = trimmed.starts_with("http://")
+            || trimmed.starts_with("https://")
+            || (trimmed.len() == 32 && trimmed.chars().all(|c| ('a'..='p').contains(&c)));
+
+        let result = if is_remote {
             self.send(Event::Toast {
-                message: "Could not read extension file".into(),
+                message: "Fetching extension from Chrome Web Store...".into(),
             });
-            return;
+            peek_ext::crx::fetch_and_install(trimmed, &extensions_dir)
+        } else {
+            let p = std::path::Path::new(trimmed);
+            if !p.exists() {
+                self.send(Event::Toast {
+                    message: format!("Extension path not found: {trimmed}"),
+                });
+                return;
+            }
+
+            if p.is_dir() {
+                peek_ext::ExtensionRegistry::install_from_folder(p, &extensions_dir)
+            } else if let Ok(bytes) = std::fs::read(p) {
+                peek_ext::ExtensionRegistry::install_from_bytes(&bytes, &extensions_dir)
+            } else {
+                self.send(Event::Toast {
+                    message: "Could not read extension file".into(),
+                });
+                return;
+            }
         };
 
         match result {
             Ok(ext) => {
                 let name = ext.name.clone();
+                let version = ext.version.clone();
                 self.extensions.extensions.retain(|e| e.id != ext.id);
                 self.extensions.extensions.push(ext);
                 self.send(Event::Toast {
-                    message: format!("Installed extension: {name}"),
+                    message: format!("Installed extension: {name} v{version}"),
                 });
                 self.send_extensions_list();
             }

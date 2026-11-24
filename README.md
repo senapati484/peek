@@ -11,11 +11,13 @@
 
 <p align="center">
   <a href="https://github.com/senapati484/peek/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/senapati484/peek?color=3b82f6&logo=github&label=Release" alt="Latest Release" /></a>
+  <a href="https://sourceforge.net/projects/peek-browser/"><img src="https://img.shields.io/badge/SourceForge-peek--browser-f15a24?logo=sourceforge&logoColor=white" alt="SourceForge Project" /></a>
+  <a href="https://sourceforge.net/projects/peek-browser/files/latest/download"><img src="https://img.shields.io/sourceforge/dt/peek-browser?label=SourceForge%20Downloads&color=f15a24&logo=sourceforge" alt="SourceForge Downloads" /></a>
   <a href="https://github.com/senapati484/peek/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/senapati484/peek/ci.yml?branch=main&label=CI&logo=githubactions" alt="CI Status" /></a>
   <a href="https://github.com/senapati484/peek/releases"><img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?logo=apple&logoColor=white" alt="Platform Support" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald?style=flat" alt="MIT License" /></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.80%2B-orange?logo=rust" alt="Rust 1.80+" /></a>
-  <img src="https://img.shields.io/badge/Tests-70%2F70%20Passing-success" alt="Tests 70/70 Passing" />
+  <img src="https://img.shields.io/badge/Tests-74%2F74%20Passing-success" alt="Tests 74/74 Passing" />
   <img src="https://img.shields.io/badge/Memory-40--70MB%20Baseline-purple" alt="Memory 40-70MB" />
 </p>
 
@@ -34,16 +36,21 @@
 
 ## 📦 Downloads & Installers
 
-Official release binaries and standalone installer packages are compiled and cryptographically verified on every release:
+Official release binaries and standalone installer packages are compiled, cryptographically verified, and mirrored across **GitHub Releases** and **[SourceForge (peek-browser)](https://sourceforge.net/projects/peek-browser/)**:
 
-| Platform | Package Format | Architecture | Download Link | Quick Installation |
-| :--- | :--- | :--- | :--- | :--- |
-| **macOS** | Apple Disk Image (`.dmg`) | Universal (Apple Silicon & Intel) | [**Peek-macos-universal.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.dmg) | Open DMG & drag `Peek.app` to `/Applications` |
-| **macOS** | Portable Archive (`.zip`) | Universal (Apple Silicon & Intel) | [**Peek-macos-universal.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.zip) | Extract and run `Peek.app` |
-| **Linux** | Native Debian Package (`.deb`) | `x86_64` / `amd64` | [**peek_0.1.0_amd64.deb**](https://github.com/senapati484/peek/releases/download/v0.1.0/peek_0.1.0_amd64.deb) | `sudo dpkg -i peek_0.1.0_amd64.deb` |
-| **Linux** | Standalone Tarball (`.tar.gz`) | `x86_64` | [**Peek-linux-x86_64.tar.gz**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-linux-x86_64.tar.gz) | `tar -xzf Peek-linux-x86_64.tar.gz && ./install.sh` |
-| **Windows** | Portable Archive (`.zip`) | `x86_64` | [**Peek-windows-x86_64.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-windows-x86_64.zip) | Extract and run `Peek.exe` |
-| **Checksums** | SHA256 Verification | All Platforms | [**SHA256SUMS.txt**](https://github.com/senapati484/peek/releases/download/v0.1.0/SHA256SUMS.txt) | `sha256sum -c SHA256SUMS.txt` |
+| Platform | Package Format | Architecture | GitHub Release | SourceForge Mirror | Quick Installation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **macOS** | Apple Disk Image (`.dmg`) | Universal (Apple Silicon & Intel) | [**peek.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.dmg) | [**peek.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.dmg/download) | Open DMG & drag `Peek.app` to `/Applications` |
+| **macOS** | Apple Disk Image (`.dmg`) | Apple Silicon (M1/M2/M3/M4) | [**peek-arm64.dmg**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-arm64.dmg) | [**peek-arm64.dmg**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-arm64.dmg/download) | Optimized Apple Silicon installer |
+| **macOS** | Portable Bundle (`.zip`) | Universal (Apple Silicon & Intel) | [**peek-macos.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-macos-universal.zip) | [**peek-macos.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-macos.zip/download) | Extract and run `Peek.app` |
+| **Linux** | Native Debian Package (`.deb`) | `x86_64` / `amd64` | [**peek.deb**](https://github.com/senapati484/peek/releases/download/v0.1.0/peek_0.1.0_amd64.deb) | [**peek.deb**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.deb/download) | `sudo dpkg -i peek.deb` |
+| **Linux** | Standalone Tarball (`.tar.gz`) | `x86_64` | [**peek-linux.tar.gz**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-linux-x86_64.tar.gz) | [**peek-linux.tar.gz**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-linux.tar.gz/download) | `tar -xzf peek-linux.tar.gz && ./install.sh` |
+| **Windows** | Standalone Executable (`.exe`) | `x86_64` | — | [**peek.exe**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek.exe/download) | Direct portable executable |
+| **Windows** | Portable Archive (`.zip`) | `x86_64` | [**peek-windows.zip**](https://github.com/senapati484/peek/releases/download/v0.1.0/Peek-windows-x86_64.zip) | [**peek-windows.zip**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/peek-windows.zip/download) | Extract and run `Peek.exe` |
+| **Checksums** | SHA256 Verification | All Platforms | [**SHA256SUMS.txt**](https://github.com/senapati484/peek/releases/download/v0.1.0/SHA256SUMS.txt) | [**SHA256SUMS.txt**](https://sourceforge.net/projects/peek-browser/files/v0.1.0/) | `sha256sum -c SHA256SUMS.txt` |
+
+> [!TIP]
+> You can also browse and download all assets directly from the [SourceForge Files Directory](https://sourceforge.net/projects/peek-browser/files/v0.1.0/).
 
 ---
 
@@ -116,6 +123,11 @@ A tokenized, contrast-compliant light palette designed for daytime productivity.
 - Integrates Brave's high-performance Rust adblock engine directly into the native request loop.
 - Network requests matching ad, tracker, and telemetry blocklists are stopped before execution.
 - Injects cosmetic CSS element hiding stylesheets into the DOM for clean, distraction-free reading.
+
+### 🧩 Chrome Extension & Manifest V3 Host Engine
+- **Direct Chrome Web Store Support:** Navigate to any extension page on the [Chrome Web Store](https://chromewebstore.google.com). Peek seamlessly reveals an active **Add to Peek** action button right on the store page and in the top omnibar for 1-click installation.
+- **Multiple Installation Methods:** Install extensions by pasting a Chrome Web Store URL, a 32-character extension ID, or loading unpacked local directories and `.crx` / `.zip` packages via **Settings > Extensions**.
+- **Scoped Manifest V3 Runtime:** Injects content scripts and styles into matching pages with an asynchronous, Promise-ready `chrome.*` and `browser.*` polyfill supporting `storage.local`, `storage.sync`, `declarativeNetRequest`, `tabs`, `action`, and `runtime` messaging without compromising memory safety.
 
 ### 👤 Multi-Profile Data Partitioning
 - Create dedicated browsing profiles (e.g. *Personal*, *Work*, *Research*).

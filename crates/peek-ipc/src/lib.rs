@@ -498,6 +498,11 @@ pub enum PageEvent {
     UrlChanged { url: String },
     /// Smart night mode state update from in-page script.
     InvertDarkState { active: bool, message: String },
+    /// Triggered from Chrome Web Store page to install an extension into Peek.
+    InstallWebstoreExtension {
+        extension_id: String,
+        name: Option<String>,
+    },
 }
 
 /// Host-level shortcuts reported by injected page scripts.

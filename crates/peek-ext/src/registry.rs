@@ -171,6 +171,24 @@ impl ExtensionRegistry {
                             scripts.push(wrapped);
                         }
                     }
+                    for css_file in &cs.css {
+                        let css_path = ext.dir.join(css_file);
+                        if let Ok(css_content) = fs::read_to_string(&css_path) {
+                            let escaped = css_content.replace('\\', "\\\\").replace('`', "\\`").replace('$', "\\$");
+                            let inject_css = format!(
+                                r#"(function() {{
+                                    try {{
+                                        var style = document.createElement("style");
+                                        style.setAttribute("data-peek-ext", "{}");
+                                        style.textContent = `{}`;
+                                        (document.head || document.documentElement).appendChild(style);
+                                    }} catch(e) {{}}
+                                }})();"#,
+                                ext.id, escaped
+                            );
+                            scripts.push(inject_css);
+                        }
+                    }
                 }
             }
         }

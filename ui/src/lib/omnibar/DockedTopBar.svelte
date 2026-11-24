@@ -69,6 +69,13 @@
 
   let zenHoverTimer: ReturnType<typeof setTimeout> | undefined;
   let profileInitial = $derived((activeProfile?.[0] || 'D').toUpperCase());
+  let isWebstoreExtensionPage = $derived(
+    Boolean(
+      activeUrl &&
+        (activeUrl.includes('chromewebstore.google.com/detail/') ||
+          activeUrl.includes('chrome.google.com/webstore/detail/'))
+    )
+  );
 </script>
 
 <div
@@ -196,6 +203,25 @@
         title="Clear"
       >
         ×
+      </button>
+    {/if}
+
+    <!-- Chrome Web Store Add to Peek Button -->
+    {#if isWebstoreExtensionPage}
+      <button
+        class="webstore-install-btn"
+        title="Add Extension to Peek"
+        type="button"
+        onclick={(e) => {
+          e.stopPropagation();
+          if (activeUrl) {
+            send({ type: 'installExtension', path: activeUrl });
+          }
+        }}
+        aria-label="Add Extension to Peek"
+      >
+        <span class="ext-btn-icon">🧩</span>
+        <span class="ext-btn-text">Add to Peek</span>
       </button>
     {/if}
 
@@ -581,6 +607,45 @@
   .tool-btn:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  .webstore-install-btn {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    margin-right: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+  }
+
+  .webstore-install-btn:hover {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
+  }
+
+  .webstore-install-btn:active {
+    transform: translateY(0);
+  }
+
+  .ext-btn-icon {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .ext-btn-text {
+    white-space: nowrap;
+    line-height: 1;
   }
 
   .tool-icon {

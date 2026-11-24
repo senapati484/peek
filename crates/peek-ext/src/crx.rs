@@ -12,10 +12,90 @@ use std::io::{self, Cursor, Read, Seek};
 use std::path::Path;
 use zip::ZipArchive;
 
-use crate::ExtError;
+use crate::{ExtError, ExtensionRegistry, InstalledExtension};
 
 const CRX3_MAGIC: &[u8; 4] = b"Cr24";
 const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
+
+/// Extract a 32-character Chrome extension ID from an input URL or raw ID string.
+pub fn extract_extension_id_from_input(input: &str) -> Option<String> {
+    let clean = input.trim().trim_end_matches('/');
+
+    // 1. Exact 32-character alphanumeric ID in [a-p]
+    if clean.len() == 32 && clean.chars().all(|c| ('a'..='p').contains(&c)) {
+        return Some(clean.to_string());
+    }
+
+    // 2. Chrome Web Store URL (e.g. https://chromewebstore.google.com/detail/name/id or /detail/id)
+    if clean.contains("chromewebstore.google.com") || clean.contains("chrome.google.com/webstore") {
+        if let Some(pos) = clean.rfind('/') {
+            let candidate = &clean[pos + 1..];
+            let pure_id = candidate.split('?').next().unwrap_or(candidate);
+            if pure_id.len() == 32 && pure_id.chars().all(|c| ('a'..='p').contains(&c)) {
+                return Some(pure_id.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// Download a CRX package directly from Google's official update server for a given extension ID.
+pub fn download_crx_bytes(extension_id: &str) -> Result<Vec<u8>, ExtError> {
+    let url = format!(
+        "https://clients2.google.com/service/update2/crx?response=redirect&os=win&arch=x64&os_arch=x86_64&nacl_arch=x86-64&prod=chromecrx&prodchannel=stable&prodversion=120.0.0.0&lang=en-US&acceptformat=crx3&x=id%3D{}%26installsource%3Dondemand%26uc",
+        extension_id
+    );
+
+    download_url_bytes(&url)
+}
+
+/// Download raw package bytes from any HTTP or HTTPS URL using native curl.
+pub fn download_url_bytes(url: &str) -> Result<Vec<u8>, ExtError> {
+    let output = std::process::Command::new("curl")
+        .arg("-s")
+        .arg("-L")
+        .arg("-A")
+        .arg("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .arg("--max-time")
+        .arg("30")
+        .arg(url)
+        .output()
+        .map_err(ExtError::Io)?;
+
+    if !output.status.success() {
+        return Err(ExtError::InvalidPackage("curl download failed".into()));
+    }
+
+    let bytes = output.stdout;
+    if bytes.len() < 4 {
+        return Err(ExtError::InvalidPackage("Downloaded package is empty or truncated".into()));
+    }
+
+    if &bytes[0..4] != CRX3_MAGIC && &bytes[0..4] != ZIP_MAGIC {
+        let text = String::from_utf8_lossy(&bytes);
+        if text.contains("error-unknownApplication") || text.contains("404") {
+            return Err(ExtError::InvalidPackage("Extension was not found on the Chrome Web Store".into()));
+        }
+        return Err(ExtError::InvalidPackage("Downloaded content is not a valid CRX3 or ZIP package".into()));
+    }
+
+    Ok(bytes)
+}
+
+/// Download and install an extension from a Chrome Web Store URL, extension ID, or direct URL.
+pub fn fetch_and_install(input: &str, destination_parent: &Path) -> Result<InstalledExtension, ExtError> {
+    let trimmed = input.trim();
+    let bytes = if let Some(ext_id) = extract_extension_id_from_input(trimmed) {
+        download_crx_bytes(&ext_id)?
+    } else if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        download_url_bytes(trimmed)?
+    } else {
+        return Err(ExtError::InvalidPackage(format!("Unrecognized extension URL or ID: {trimmed}")));
+    };
+
+    ExtensionRegistry::install_from_bytes(&bytes, destination_parent)
+}
 
 /// Extract a CRX3 or standard ZIP extension package into `destination_dir`.
 pub fn extract_crx_or_zip(data: &[u8], destination_dir: &Path) -> Result<(), ExtError> {
@@ -145,5 +225,22 @@ mod tests {
 
         let manifest = tmp.path().join("manifest.json");
         assert!(manifest.exists());
+    }
+
+    #[test]
+    fn extracts_extension_id_from_url_and_raw_id() {
+        let raw = "imeeoinlogcehkhfjcopabijecfobcod";
+        assert_eq!(extract_extension_id_from_input(raw), Some(raw.to_string()));
+
+        let url = "https://chromewebstore.google.com/detail/netmirror-extension/imeeoinlogcehkhfjcopabijecfobcod";
+        assert_eq!(extract_extension_id_from_input(url), Some(raw.to_string()));
+
+        let url_query = "https://chromewebstore.google.com/detail/netmirror-extension/imeeoinlogcehkhfjcopabijecfobcod?hl=en";
+        assert_eq!(extract_extension_id_from_input(url_query), Some(raw.to_string()));
+
+        let old_url = "https://chrome.google.com/webstore/detail/something/imeeoinlogcehkhfjcopabijecfobcod/";
+        assert_eq!(extract_extension_id_from_input(old_url), Some(raw.to_string()));
+
+        assert_eq!(extract_extension_id_from_input("invalid-id"), None);
     }
 }

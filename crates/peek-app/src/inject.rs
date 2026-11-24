@@ -808,5 +808,102 @@ const PAGE_SCRIPT: &str = r##"
       return 100;
     }
   };
+
+  // Chrome Web Store Extension Bridge & Installation Helper
+  if (location.hostname.indexOf("chromewebstore") !== -1 || location.hostname.indexOf("chrome.google.com") !== -1) {
+    function getStoreExtId() {
+      var m = location.pathname.match(/\/detail\/(?:[^\/]+\/)?([a-p]{32})/);
+      return m ? m[1] : null;
+    }
+
+    function enhanceChromeWebStore() {
+      var extId = getStoreExtId();
+      if (!extId) return;
+
+      // 1. Hide "Switch to Chrome to install extensions and themes" notice banner
+      try {
+        var banners = document.querySelectorAll("aside, div[role='region'], div[role='alert']");
+        for (var b = 0; b < banners.length; b++) {
+          if (banners[b].textContent && banners[b].textContent.indexOf("Switch to Chrome") !== -1) {
+            banners[b].style.display = "none";
+          }
+        }
+      } catch (e) {}
+
+      // 2. Wire up "Add to Chrome" button to Add to Peek
+      try {
+        var buttons = document.querySelectorAll("button");
+        for (var i = 0; i < buttons.length; i++) {
+          var btn = buttons[i];
+          var txt = (btn.textContent || "").trim();
+          if (
+            txt === "Add to Chrome" ||
+            txt === "Install Chrome" ||
+            txt === "Switch to Chrome" ||
+            btn.getAttribute("aria-label") === "Add to Chrome"
+          ) {
+            btn.disabled = false;
+            btn.removeAttribute("disabled");
+            btn.removeAttribute("aria-disabled");
+            btn.style.pointerEvents = "auto";
+            btn.style.cursor = "pointer";
+            btn.style.background = "#2563eb";
+            btn.style.color = "#ffffff";
+            btn.style.fontWeight = "600";
+            btn.style.borderRadius = "9999px";
+            btn.style.padding = "8px 20px";
+            btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">🧩 Add to Peek</span>';
+
+            if (!btn.__peekWired) {
+              btn.__peekWired = true;
+              btn.addEventListener("click", function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                btn.innerHTML = '<span>⏳ Downloading & Installing...</span>';
+                btn.style.opacity = "0.85";
+                send({
+                  type: "installWebstoreExtension",
+                  extensionId: extId,
+                  name: document.title
+                });
+              }, true);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 3. Inject floating "Add to Peek" button in bottom corner
+      if (!document.getElementById("peek-ext-fab")) {
+        try {
+          var fab = document.createElement("button");
+          fab.id = "peek-ext-fab";
+          fab.type = "button";
+          fab.style.cssText = "position:fixed;bottom:24px;right:24px;z-index:2147483647;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#ffffff;padding:10px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 12px 28px rgba(0,0,0,0.5);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.15s ease,box-shadow 0.15s ease;";
+          fab.innerHTML = '<span style="font-size:16px;">🧩</span><span>Install Extension to <strong>Peek</strong></span>';
+          fab.onmouseenter = function() { fab.style.transform = "translateY(-2px) scale(1.02)"; };
+          fab.onmouseleave = function() { fab.style.transform = "translateY(0) scale(1)"; };
+          fab.onclick = function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            fab.innerHTML = '<span>⏳ Downloading & Installing...</span>';
+            fab.style.pointerEvents = "none";
+            send({
+              type: "installWebstoreExtension",
+              extensionId: extId,
+              name: document.title
+            });
+          };
+          (document.body || document.documentElement).appendChild(fab);
+        } catch (e) {}
+      }
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", enhanceChromeWebStore);
+    } else {
+      enhanceChromeWebStore();
+    }
+    setInterval(enhanceChromeWebStore, 1000);
+  }
 })();
 "##;

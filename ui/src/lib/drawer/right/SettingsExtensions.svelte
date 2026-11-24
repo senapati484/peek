@@ -30,17 +30,25 @@
 <div class="section-title">Install Chrome Extension (MV3)</div>
 <div class="card settings-card">
   <p class="field-desc" style="margin-bottom: 8px;">
-    Supports Manifest V3 unpacked directories and .crx packages with
-    isolated content scripts.
+    Supports Manifest V3 extensions directly from the Chrome Web Store (paste URL or 32-character ID), or provide a local .crx package or unpacked folder.
   </p>
   <div class="input-action-row">
     <input
       type="text"
-      placeholder="/path/to/extension or extension.crx"
+      placeholder="Web Store URL, Extension ID, or /path/to/extension.crx"
       bind:value={extensionInstallPath}
       class="text-input"
     />
     <button class="primary-btn" onclick={handleInstallExtension}>Install</button>
+  </div>
+  <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+    <button
+      class="ghost-btn"
+      style="font-size: 11px; padding: 4px 10px; border-radius: 6px; color: #38bdf8; display: inline-flex; align-items: center; gap: 4px;"
+      onclick={() => send({ type: 'navigate', input: 'https://chromewebstore.google.com' })}
+    >
+      <span>Browse Chrome Web Store ↗</span>
+    </button>
   </div>
 </div>
 
